@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="yjkellyjoo.vuln.dao.CveDao">
+	
+	<resultMap id="CveDataMap" type="yjkellyjoo.vuln.model.CveVo">
+		<id column="ID" property="id" />
+		<result column="BASIC_INFO" property="basicInfo" />  			
+		<result column="AFFECTS" property="affects" />  			
+		<result column="PROBLEM_TYPE" property="problemType" />  			
+		<result column="CWE_ID" property="cweId" />  			
+		<result column="REFERENCES" property="references" />			
+		<result column="DESCRIPTION" property="description" />  			
+		<result column="PUBLISHED_DATE" property="publishedDate" />  			
+		<result column="LAST_MODIFIED_DATE" property="lastModifiedDate" />  			
+		<result column="CONFIGURATIONS" property="configurations" />  			
+		<result column="BASE_METRIC_V3" property="baseMetricV3" />  			
+		<result column="V3_BASE_SCORE" property="v3BaseScore" />  			
+		<result column="V3_SEVERITY" property="v3Severity" />  			
+		<result column="BASE_METRIC_V2" property="baseMetricV2" />  			
+		<result column="V2_BASE_SCORE" property="v2BaseScore" />  			
+		<result column="V2_SEVERITY" property="v2Severity" /> 
+		<result column="LIBRARY_MAPPING_DATE" property="libraryMappingDate" />
+		<result column="VULN_LIBRARY_INFO" property="vulnLibraryInfos" typeHandler="yjkellyjoo.runtime.mybatis.JsonListVulnLibraryInfoTypeHandler"/>
+	</resultMap>
+
+	<sql id="selectCveSql">
+		SELECT 
+			TB_CVE_DATA.ID, 
+			TB_CVE_DATA.BASIC_INFO, 
+			TB_CVE_DATA.AFFECTS, 
+			TB_CVE_DATA.PROBLEM_TYPE, 
+			TB_CVE_DATA.CWE_ID, 
+			TB_CVE_DATA.`REFERENCES`, 
+			TB_CVE_DATA.DESCRIPTION, 
+			TB_CVE_DATA.PUBLISHED_DATE,
+			TB_CVE_DATA.LAST_MODIFIED_DATE,
+			TB_CVE_DATA.CONFIGURATIONS,	
+			TB_CVE_DATA.BASE_METRIC_V3,
+			TB_CVE_DATA.V3_BASE_SCORE,
+			TB_CVE_DATA.V3_SEVERITY,
+			TB_CVE_DATA.BASE_METRIC_V2,
+			TB_CVE_DATA.V2_BASE_SCORE,
+			TB_CVE_DATA.V2_SEVERITY
+		FROM
+			TB_CVE_DATA
+	</sql>
+	
+	<select id="selectCve" resultMap="CveDataMap">
+		<include refid="selectCveSql" />
+		WHERE 
+			TB_CVE_DATA.ID = #{cveId}	
+    	/* yjkellyjoo.vuln.dao.CveDao.selectCve */
+	</select>	
+	
+	<select id="selectCveListPaging" resultMap="CveDataMap" parameterType="hashmap">
+		SELECT
+			CVE.ID,
+			CVE.DESCRIPTION,
+			CVE.PUBLISHED_DATE,
+			CVE.LAST_MODIFIED_DATE,
+			VUL.VULN_LIBRARY_INFO,
+			VUL.LAST_UPDATED AS LIBRARY_MAPPING_DATE
+		FROM
+			TB_CVE_DATA AS CVE
+			LEFT JOIN TB_VULN_LIBRARY AS VUL ON VUL.VULN_SOURCE_CD = 'CVE' AND CVE.ID = VUL.REF_ID
+		<where>
+			<if test="param.keyword != null and param.keyword != ''">
+			CVE.ID = #{param.keyword}
+			</if>
+		</where>
+		ORDER BY
+		<choose>
+			<when test="param.orderColumn.equalsIgnoreCase('cvdId')">
+			CVE.ID
+			</when>
+			<when test="param.orderColumn.equalsIgnoreCase('publishDate')">
+			CVE.PUBLISHED_DATE
+			</when>
+			<otherwise>
+			CVE.LAST_MODIFIED_DATE
+			</otherwise>
+		</choose>
+		<choose>
+			<when test="param.orderDir.equalsIgnoreCase('asc')">
+			ASC
+			</when>
+			<when test="param.orderDir.equalsIgnoreCase('desc')">
+			DESC
+			</when>
+			<otherwise>
+			DESC
+			</otherwise>
+		</choose>	
+		<if test="param.length &gt; 0">
+		LIMIT #{param.start}, #{param.length}
+		</if>
+    	/* yjkellyjoo.vuln.dao.CveDao.selectCveListPaging */
+	</select>
+	
+	<select id="selectTotalCveCount" resultType="int" parameterType="hashmap">
+		SELECT
+			COUNT(1) AS CNT
+		FROM
+			TB_CVE_DATA AS CVE
+			LEFT JOIN TB_VULN_LIBRARY AS VUL ON VUL.VULN_SOURCE_CD = 'CVE' AND CVE.ID = VUL.REF_ID
+		<where>
+			<if test="param.keyword != null and param.keyword != ''">
+			CVE.ID = #{param.keyword}
+			</if>
+		</where>
+    	/* yjkellyjoo.vuln.dao.CveDao.selectTotalCveCount */
+	</select>
+</mapper>
