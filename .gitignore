@@ -48,3 +48,4 @@ target/classes/META-INF/MANIFEST.MF
 target/classes/yjkellyjoo/runtime/config/TransactionConfig.class
 target/classes/yjkellyjoo/vuln/service/ScraperService.class
 target/*
+vendor-product.train
