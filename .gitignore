@@ -34,3 +34,17 @@ target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst
 target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst
 target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst
 target/test-classes/yjkellyjoo/NerDatasetScraperApplicationTests.class
+.classpath
+.localized
+HELP.md
+.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+.mvn/wrapper/MavenWrapperDownloader.java
+.settings/org.eclipse.core.resources.prefs
+.settings/org.eclipse.jdt.core.prefs
+.settings/org.eclipse.m2e.core.prefs
+.settings/org.eclipse.wst.common.project.facet.core.xml
+target/classes/META-INF/MANIFEST.MF
+target/classes/yjkellyjoo/runtime/config/TransactionConfig.class
+target/classes/yjkellyjoo/vuln/service/ScraperService.class
+target/*

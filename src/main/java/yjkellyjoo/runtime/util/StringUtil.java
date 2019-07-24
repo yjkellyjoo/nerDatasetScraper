@@ -108,6 +108,11 @@ public class StringUtil {
 
 		return groupId.toLowerCase() + ":" + artifactId.toLowerCase() + ":" + version.toLowerCase();
 	}
+	
+	public static String getStringName(String raw) {
+
+		return raw.toLowerCase().replaceAll(".-'", " ");
+	}
 
 	public static void main(String args[]) {
 

@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="yjkellyjoo.vuln.dao.ProductDao">
+	
+	<resultMap id="ProductMap" type="yjkellyjoo.vuln.model.ProductVo">
+		<result column="LANGUAGE" property="language" />
+		<result column="REPOSITORY" property="repository" />  			
+		<result column="PRODUCT_KEY" property="productKey" /> 
+		<result column="LATEST_VERSION" property="latestVersion" /> 
+		<result column="NAME" property="name" /> 
+		<result column="DESCRIPTION" property="description" /> 
+		<result column="LICENSE" property="license" /> 
+		<result column="CREATED" property="created" /> 
+		<result column="LAST_UPDATED" property="lastUpdated" /> 
+		<result column="PROCESSED" property="processed" /> 
+	</resultMap>
+
+
+
+	<select id="selectAllProductList" resultMap="ProductMap" parameterType="hashmap">
+		SELECT
+			*
+		FROM
+			TB_PRODUCT
+		WHERE
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository}
+		/* yjkellyjoo.vuln.dao.ProductDao.selectAllProductList */
+	</select>
+	
+	<select id="selectNotProcessedProductListInLimit" parameterType="hashmap" resultMap="ProductMap">
+		SELECT
+			* 
+		FROM TB_PRODUCT
+		WHERE
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository} AND
+			(PROCESSED IS NULL OR PROCESSED = 0)
+			
+		<if test ="prefix != null">
+			AND PRODUCT_KEY LIKE CONCAT(#{prefix}, '%')
+		</if>
+		ORDER BY PRODUCT_KEY
+		LIMIT #{start}, #{end}
+    	/* yjkellyjoo.vuln.dao.ProductDao.selectNotProcessedProductListInLimit */
+	</select>
+	
+	<select id="selectProductListInLimit" parameterType="hashmap" resultMap="ProductMap">
+		SELECT
+			* 
+		FROM TB_PRODUCT
+		<if test ="language != null">
+		WHERE			
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository}
+		</if>
+		ORDER BY LANGUAGE, REPOSITORY, PRODUCT_KEY
+		LIMIT #{start}, #{end}
+    	/* yjkellyjoo.vuln.dao.ProductDao.selectProductListInLimit */
+	</select>
+	
+	<select id="selectProduct" parameterType="hashmap" resultMap="ProductMap">
+		SELECT
+			* 
+		FROM TB_PRODUCT
+		WHERE
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository} AND
+			PRODUCT_KEY = #{productKey}
+    	/* yjkellyjoo.vuln.dao.ProductDao.selectProduct */
+	</select>
+	
+	<insert id="insertAllProductFromMaven" parameterType="hashmap">
+		INSERT INTO TB_PRODUCT (`LANGUAGE`, REPOSITORY, PRODUCT_KEY, CREATED)
+			SELECT DISTINCT `LANGUAGE`, #{repository}, PRODUCT_KEY, NOW() FROM TB_MAVEN_ARCHIVE 
+			WHERE 
+				LANGUAGE = #{language} AND
+				REPOSITORY_NAME = #{repositoryName}
+		/* yjkellyjoo.vuln.dao.ProductDao.insertAllProductFromMaven */
+	</insert>
+
+	<insert id="insertProductList" parameterType="yjkellyjoo.vuln.model.ProductVo">
+		INSERT IGNORE INTO TB_PRODUCT (
+			LANGUAGE,
+			REPOSITORY,
+			PRODUCT_KEY,
+			LATEST_VERSION,
+			NAME,
+			DESCRIPTION,
+			LICENSE,
+			CREATED,
+			LAST_UPDATED,
+			PROCESSED
+		) VALUES 
+		<foreach collection="list" item="item" separator=", ">
+		(
+			#{item.language},
+			#{item.repository},
+			#{item.productKey},
+			#{item.latestVersion},
+			#{item.name},
+			#{item.description},
+			#{item.license},
+			#{item.created},
+			#{item.lastUpdated},
+			#{item.processed}
+		)
+		</foreach>
+		/* yjkellyjoo.vuln.dao.ProductDao.insertProductList */
+	</insert>
+	
+	<insert id="insertProduct" parameterType="yjkellyjoo.vuln.model.ProductVo">
+		INSERT INTO TB_PRODUCT (
+			LANGUAGE,
+			REPOSITORY,
+			PRODUCT_KEY,
+			LATEST_VERSION,
+			NAME,
+			DESCRIPTION,
+			LICENSE,
+			CREATED,
+			LAST_UPDATED,
+			PROCESSED
+		) VALUES (
+			#{language},
+			#{repository},
+			#{productKey},
+			#{latestVersion},
+			#{name},
+			#{description},
+			#{license},
+			#{created},
+			#{lastUpdated},
+			#{processed}
+		)
+		/* yjkellyjoo.vuln.dao.ProductDao.insertProduct */
+	</insert>
+		
+		
+	<update id="updateProduct" parameterType="yjkellyjoo.vuln.model.ProductVo">
+		update TB_PRODUCT set			
+			LATEST_VERSION = #{latestVersion}, 
+			NAME = #{name}, 
+			DESCRIPTION = #{description},
+			LICENSE = #{license},
+			LAST_UPDATED = #{lastUpdated},	
+			PROCESSED = #{processed}
+		where 
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository} AND
+			PRODUCT_KEY = #{productKey}
+		/* yjkellyjoo.vuln.dao.ProductDao.updateProduct */
+	</update>
+	
+	<update id="updateProductToUnprocessed" parameterType="yjkellyjoo.vuln.model.ProductVo">
+		update TB_PRODUCT set
+			PROCESSED = 0
+		where 
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository} AND
+			PRODUCT_KEY = #{productKey}
+		/* yjkellyjoo.vuln.dao.ProductDao.updateProductToUnprocessed */
+	</update>
+	
+	<update id="updateProductList" parameterType="yjkellyjoo.vuln.model.ProductVo">
+		<foreach collection="list" item="item" separator="; ">
+			update TB_PRODUCT set			
+				LATEST_VERSION = #{item.latestVersion}, 
+				NAME = #{item.name}, 
+				DESCRIPTION = #{item.description},
+				LICENSE = #{item.license},
+				LAST_UPDATED = #{item.lastUpdated},	
+				PROCESSED = #{item.processed}
+			where 
+				LANGUAGE = #{item.language} AND
+				REPOSITORY = #{item.repository} AND
+				PRODUCT_KEY = #{item.productKey}
+		</foreach>
+			/* yjkellyjoo.vuln.dao.ProductDao.updateProductList */
+	</update>
+	
+	
+	<delete id="deleteAllProduct" parameterType = "hashmap">
+		DELETE FROM TB_PRODUCT 
+		WHERE 
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository}
+		/* yjkellyjoo.vuln.dao.ProductDao.deleteAllProduct */
+	</delete>
+	
+	<delete id="deleteProduct" parameterType = "hashmap">
+		DELETE FROM TB_PRODUCT
+		WHERE
+			LANGUAGE = #{language} AND
+			REPOSITORY = #{repository} AND
+			PRODUCT_KEY = #{productKey}
+		/* yjkellyjoo.vuln.dao.ProductDao.deleteProduct */
+	</delete>
+		
+</mapper>

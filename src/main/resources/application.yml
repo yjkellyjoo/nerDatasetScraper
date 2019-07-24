@@ -5,7 +5,7 @@ spring:
 
   #profile 설정을 안했을 시 active profile
   profiles:
-    active: local
+    active: prod
 
 ---
 
