@@ -109,9 +109,10 @@ public class StringUtil {
 		return groupId.toLowerCase() + ":" + artifactId.toLowerCase() + ":" + version.toLowerCase();
 	}
 	
-	public static String getStringName(String raw) {
-
-		return raw.toLowerCase().replaceAll(".-'", " ");
+	public static String[] getStringNames(String raw) {
+		raw = raw.replaceAll("@", "");
+		String[] tmp = raw.split("._'");
+		return tmp;
 	}
 
 	public static void main(String args[]) {

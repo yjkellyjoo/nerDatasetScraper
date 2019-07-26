@@ -53,6 +53,11 @@ public class ScraperService {
 	@Resource(name="yjkellyjoo.vuln.dao.CveDao")
 	private CveDao cveDao;
 	
+	private final String VENDOR = "<START:vendor>";
+	private final String PRODUCT = "<START:product>";
+	private final String END = "<END>";
+
+	
 	/**
 	 * VULN_LIBRARY 정보 조회
 	 */
@@ -62,7 +67,7 @@ public class ScraperService {
 		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
 		
 		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
-			log.info("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
+			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
 			this.manageDescription(vulnLibraryVo);
 		}
 		
@@ -83,8 +88,7 @@ public class ScraperService {
 			return;
 		}
 		
-		CveVo cve = cveDao.selectCve(vulnLib.getRefId());
-		
+		// vulnLibInfo list에 한 CVE의 취약한 library 정보 중복 없이 정리 
 		List<VulnLibraryInfo> vulnLibInfo = new ArrayList<VulnLibraryInfo>();
 		for (VulnLibraryInfo vuln : vulnLib.getVulnLibraryInfos()) {
 			VulnLibraryInfo tmp = new VulnLibraryInfo();
@@ -105,115 +109,110 @@ public class ScraperService {
 			}
 		}
 		
-		boolean pflag = false, vflag = false;
+		// description에 vendor와 product 정보 기입 
+		CveVo cve = cveDao.selectCve(vulnLib.getRefId());
 		String description = cve.getDescriptionString();
-		String vendor, product;
-
 		for (int i = 0; i < vulnLibInfo.size(); i++) {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
-			log.info("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
+			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 
-			if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
-				try {
-					String tmp[] = productVo.getName().split("/");
-					if (tmp.length == 2) {
-						vendor = " "+tmp[0].substring(1)+" ";
-						product = " "+tmp[1]+" ";
-						int index = StringUtils.indexOfIgnoreCase(description, product);
-						if (index > -1) {
-							product = description.substring(index, index + product.length());
-						}
-						index = StringUtils.indexOfIgnoreCase(description, vendor);
-						if (index > -1) {
-							vendor = description.substring(index, index + vendor.length());
-						}
-
-						description = description.replaceAll("(?i)"+product, " <START:product>" + product + "<END> ");
-						if (description.contains(product)) {
-							pflag = true;
-						}
-						if (vendor.compareTo(product) != 0) {
-							description = description.replaceAll("(?i)"+vendor, " <START:vendor>" + vendor + "<END> ");
-							vflag = true;
-						}
-					}
-					else {
-						product = " "+tmp[0]+" ";
-						
-						int index = StringUtils.indexOfIgnoreCase(description, product);
-						if (index > -1) {
-							product = description.substring(index, index + product.length());
-						}
-						
-						description = description.replaceAll("(?i)"+product, " <START:product>" + product + "<END> ");					
-						if (description.contains(product)) {
-							pflag = true;
-						}
-					}
-				} catch (NullPointerException e){
-					File error = new File("Null_error.txt");
-					try {
-					FileUtils.writeStringToFile(error, vulnLib.getRefId() +", "+ vulnLibInfo.get(i).getLangauage() +", "+ vulnLibInfo.get(i).getRepository() +", "+ vulnLibInfo.get(i).getProductKey()+"\n", StandardCharsets.UTF_8, true);
-					} catch(IOException ex) {
-						ex.printStackTrace();
-					}
-					e.printStackTrace();
-				}
-			}
-			else {
-				String tmp[] = productVo.getProductKey().split(":");
-				if (tmp.length == 2) {
-					vendor = " "+StringUtil.getStringName(tmp[0])+" ";
-					product = " "+StringUtil.getStringName(tmp[1])+" ";
-					
-					int index = StringUtils.indexOfIgnoreCase(description, product);
-					if (index > -1) {
-						product = description.substring(index, index + product.length());
-					}
-					index = StringUtils.indexOfIgnoreCase(description, vendor);
-					if (index > -1) {
-						vendor = description.substring(index, index + vendor.length());
-					}
-
-					description = description.replaceAll("(?i)"+product, " <START:product>" + product + "<END> ");					
-					if (description.contains(product)) {
-						pflag = true;
-					}
-					if (vendor.compareTo(product) != 0) {
-						description = description.replaceAll("(?i)"+vendor, " <START:vendor>" + vendor + "<END> ");
-						vflag = true;
-					}
+			try {
+				if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
+						String tmp[] = productVo.getName().split("/");
+						description = this.manageProductKey(tmp, description);
 				}
 				else {
-					product = " "+StringUtil.getStringName(tmp[0])+" ";
-					
-					int index = StringUtils.indexOfIgnoreCase(description, product);
-					if (index > -1) {
-						product = description.substring(index, index + product.length());
+						String tmp[] = productVo.getProductKey().split(":");
+						description = this.manageProductKey(tmp, description);
+				}
+				
+			} catch (NullPointerException e){
+				File error = new File("Null_error.txt");
+				try {
+				FileUtils.writeStringToFile(error, vulnLib.getRefId() +", "+ vulnLibInfo.get(i).getLangauage() +", "+ vulnLibInfo.get(i).getRepository() +", "+ vulnLibInfo.get(i).getProductKey()+"\n", StandardCharsets.UTF_8, true);
+				
+				} catch(IOException ex) {
+					ex.printStackTrace();
+				}
+				e.printStackTrace();
+			}
+			
+		}
+		
+		// description 문장들 file로 저장 
+		try {
+			if (description.contains(END)) {
+				File trainData = new File("vendor-product.train");
+
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+			} else {
+				File trainData = new File("noinfo.train");
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description+"\n", StandardCharsets.UTF_8, true);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+	}
+	
+	/**
+	 * description에 vendor와 product 정보 기입 
+	 * @param productKeySplit
+	 * @param description
+	 * @return
+	 */
+	private String manageProductKey(String[] productKeySplit, String description) {
+		String[] vendors, products;
+
+		if (productKeySplit.length == 2) {
+			vendors = StringUtil.getStringNames(productKeySplit[0]);
+			products = StringUtil.getStringNames(productKeySplit[1]);
+
+			// 대소문자 구분을 위해..
+			for (String product : products) {
+				int index = StringUtils.indexOfIgnoreCase(description, product);
+				if (index > -1) {
+					product = description.substring(index, index + product.length());
+					// 정보 입력 
+					int beginIndex = index+product.length()+1;
+					if (description.substring(beginIndex, beginIndex+END.length()).compareTo(END) != 0) {
+						description = description.replaceAll(product, " "+PRODUCT +" "+ product+" " + END+" ");
 					}
+				}
+			}
+			
+			for (String vendor : vendors) {
+				int index = StringUtils.indexOfIgnoreCase(description, vendor);
+				if (index > -1) {
+					vendor = description.substring(index, index + vendor.length());
 					
-					description = description.replaceAll("(?i)"+product, " <START:product>" + product + "<END> ");					
-					if (description.contains(product)) {
-						pflag = true;
+					int beginIndex = index+vendor.length()+1;
+					if (description.substring(beginIndex, beginIndex+END.length()).compareTo(END) != 0) {
+						description = description.replaceAll(vendor, " "+VENDOR + " "+vendor+" " + END+" ");
 					}
+				}
+			}
+		}
+		else {
+			products = StringUtil.getStringNames(productKeySplit[0]);
+
+			for (String product : products) {
+				int index = StringUtils.indexOfIgnoreCase(description, product);
+				if (index > -1) {
+					product = description.substring(index, index + product.length());
+					
+					int beginIndex = index+product.length();
+					if (description.substring(beginIndex, beginIndex+END.length()).compareTo(END) != 0) {
+						description = description.replaceAll(product, " "+PRODUCT + " "+product+" " + END+" ");	
+					}				
 				}
 			}
 
 		}
 		
-		File trainData = new File("vendor-product.train");
 		
-		if (pflag || vflag) {
-			try {
-//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description+"\n", StandardCharsets.UTF_8, true);
-				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			pflag = false;
-			vflag = false;
-		}
-
+		return description;
 	}
 	
 	/**
