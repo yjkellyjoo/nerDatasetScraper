@@ -110,11 +110,17 @@ public class StringUtil {
 	}
 	
 	public static String[] getStringNames(String raw) {
-		raw = raw.replaceAll("@", "");
-		String[] tmp = raw.split("._'");
+		raw = raw.replaceAll("[0-9]", "");
+		String[] tmp = raw.split("\\.|_|'");
 		return tmp;
 	}
 
+	public static String[] getStringNamesIncludeDash(String raw) {
+		raw = raw.replaceAll("[0-9]", "");
+		String[] tmp = raw.split("\\.|_|-|'");
+		return tmp;
+	}
+	
 	public static void main(String args[]) {
 
 		String url = "http://test.com/test.xml";

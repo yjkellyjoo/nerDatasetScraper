@@ -111,7 +111,7 @@ public class ScraperService {
 		
 		// description에 vendor와 product 정보 기입 
 		CveVo cve = cveDao.selectCve(vulnLib.getRefId());
-		String description = cve.getDescriptionString();
+		StringBuffer description = new StringBuffer(cve.getDescriptionString());
 		for (int i = 0; i < vulnLibInfo.size(); i++) {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
@@ -119,11 +119,11 @@ public class ScraperService {
 			try {
 				if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
 						String tmp[] = productVo.getName().split("/");
-						description = this.manageProductKey(tmp, description);
+						this.manageProductKey(tmp, description);
 				}
 				else {
 						String tmp[] = productVo.getProductKey().split(":");
-						description = this.manageProductKey(tmp, description);
+						this.manageProductKey(tmp, description);
 				}
 				
 			} catch (NullPointerException e){
@@ -141,14 +141,14 @@ public class ScraperService {
 		
 		// description 문장들 file로 저장 
 		try {
-			if (description.contains(END)) {
+			if (description.toString().contains(END)) {
 				File trainData = new File("vendor-product.train");
 
-//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description+"\n", StandardCharsets.UTF_8, true);
-				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description.toString()+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -162,57 +162,102 @@ public class ScraperService {
 	 * @param description
 	 * @return
 	 */
-	private String manageProductKey(String[] productKeySplit, String description) {
+	private void manageProductKey(String[] productKeySplit, StringBuffer description) {
 		String[] vendors, products;
-
+		StringBuffer result = description;
+		
 		if (productKeySplit.length == 2) {
 			vendors = StringUtil.getStringNames(productKeySplit[0]);
 			products = StringUtil.getStringNames(productKeySplit[1]);
 
-			// 대소문자 구분을 위해..
-			for (String product : products) {
-				int index = StringUtils.indexOfIgnoreCase(description, product);
-				if (index > -1) {
-					product = description.substring(index, index + product.length());
-					// 정보 입력 
-					int beginIndex = index+product.length()+1;
-					if (description.substring(beginIndex, beginIndex+END.length()).compareTo(END) != 0) {
-						description = description.replaceAll(product, " "+PRODUCT +" "+ product+" " + END+" ");
-					}
-				}
-			}
-			
-			for (String vendor : vendors) {
-				int index = StringUtils.indexOfIgnoreCase(description, vendor);
-				if (index > -1) {
-					vendor = description.substring(index, index + vendor.length());
-					
-					int beginIndex = index+vendor.length()+1;
-					if (description.substring(beginIndex, beginIndex+END.length()).compareTo(END) != 0) {
-						description = description.replaceAll(vendor, " "+VENDOR + " "+vendor+" " + END+" ");
-					}
-				}
-			}
+			this.keyArrangement(products, result, PRODUCT);
+			this.keyArrangement(vendors, result, VENDOR);
 		}
 		else {
 			products = StringUtil.getStringNames(productKeySplit[0]);
 
-			for (String product : products) {
-				int index = StringUtils.indexOfIgnoreCase(description, product);
-				if (index > -1) {
-					product = description.substring(index, index + product.length());
-					
-					int beginIndex = index+product.length();
-					if (description.substring(beginIndex, beginIndex+END.length()).compareTo(END) != 0) {
-						description = description.replaceAll(product, " "+PRODUCT + " "+product+" " + END+" ");	
-					}				
-				}
-			}
-
+			this.keyArrangement(products, result, PRODUCT);
 		}
 		
-		
-		return description;
+		// 위 방법으로 검출이 안될 경우 - 단위로 잘라서 한번 더..
+		if (!description.toString().contains(END)) {
+			if (productKeySplit.length == 2) {
+				vendors = StringUtil.getStringNamesIncludeDash(productKeySplit[0]);
+				products = StringUtil.getStringNamesIncludeDash(productKeySplit[1]);
+
+				this.keyArrangement(products, result, PRODUCT);
+				this.keyArrangement(vendors, result, VENDOR);
+			}
+			else {
+				products = StringUtil.getStringNamesIncludeDash(productKeySplit[0]);
+
+				this.keyArrangement(products, result, PRODUCT);
+			}
+		}
+
+	}
+	
+	private void keyArrangement(String[] str, StringBuffer description, final String type) {		
+//		if (type.compareTo(PRODUCT) == 0) {
+			// 대소문자 구분을 위해..
+			for (String name : str) {
+				// 흔한 이름 제외..
+				boolean flag = StringUtils.containsIgnoreCase(description, "apache") || StringUtils.containsIgnoreCase(description, "com") 
+						|| StringUtils.containsIgnoreCase(description, "org") || StringUtils.containsIgnoreCase(description, "net")
+						|| StringUtils.containsIgnoreCase(description, "rt") || StringUtils.containsIgnoreCase(description, "api");
+				if (flag) {
+					continue;
+				}
+				
+				int index = StringUtils.indexOfIgnoreCase(description, name);
+				if (index > -1) {
+					name = description.substring(index, index + name.length());
+					// 정보 입력 
+					int beginIndexEnd = index+name.length()+1;
+					int beginIndexStart = index-2;
+					try {
+						String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
+						String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
+						if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
+							description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
+						}
+					} catch (StringIndexOutOfBoundsException e) {
+						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
+						continue;
+					}
+
+				}
+			}			
+//		} 
+//		else if (type.compareTo(VENDOR) == 0) {
+//			for (String vendor : str) {
+//				// 흔한 이름 제외..
+//				boolean flag = StringUtils.containsIgnoreCase(description, "apache") || StringUtils.containsIgnoreCase(description, "com") 
+//						|| StringUtils.containsIgnoreCase(description, "org") || StringUtils.containsIgnoreCase(description, "net")
+//						|| StringUtils.containsIgnoreCase(description, "rt") || StringUtils.containsIgnoreCase(description, "api");
+//				if (flag) {
+//					continue;
+//				}
+//				
+//				int index = StringUtils.indexOfIgnoreCase(description, vendor);
+//				if (index > -1) {
+//					vendor = description.substring(index, index + vendor.length());
+//
+//					int beginIndexEnd = index+vendor.length()+1;
+//					int beginIndexStart = index-2;
+//					try {
+//						String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
+//						String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
+//						if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
+//							description.replace(index, index + vendor.length(), " "+VENDOR +" "+ vendor+" " + END+" ");
+//						}
+//					} catch (StringIndexOutOfBoundsException e) {
+//						description.replace(index, index + vendor.length(), " "+VENDOR +" "+ vendor+" " + END+" ");
+//						continue;
+//					}
+//				}
+//			}
+//		}
 	}
 	
 	/**
