@@ -6,11 +6,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Resource;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +26,7 @@ import opennlp.tools.namefind.TokenNameFinderModel;
 import opennlp.tools.util.MarkableFileInputStreamFactory;
 import opennlp.tools.util.ObjectStream;
 import opennlp.tools.util.PlainTextByLineStream;
+import opennlp.tools.util.Span;
 import opennlp.tools.util.TrainingParameters;
 
 import yjkellyjoo.runtime.util.StringUtil;
@@ -139,16 +142,19 @@ public class ScraperService {
 			
 		}
 		
+		// double space 정리
+		String result = description.toString().replaceAll("  ", " ");
+		
 		// description 문장들 file로 저장 
 		try {
-			if (description.toString().contains(END)) {
+			if (result.contains(END)) {
 				File trainData = new File("vendor-product.train");
 
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description.toString()+"\n", StandardCharsets.UTF_8, true);
-//				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, result+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+description.toString()+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -164,19 +170,19 @@ public class ScraperService {
 	 */
 	private void manageProductKey(String[] productKeySplit, StringBuffer description) {
 		String[] vendors, products;
-		StringBuffer result = description;
 		
 		if (productKeySplit.length == 2) {
 			vendors = StringUtil.getStringNames(productKeySplit[0]);
 			products = StringUtil.getStringNames(productKeySplit[1]);
 
-			this.keyArrangement(products, result, PRODUCT);
-			this.keyArrangement(vendors, result, VENDOR);
+			this.keyArrangement(products, description, PRODUCT);
+			this.keyArrangement(this.dealRepetition(vendors, products), description, VENDOR);
+			
 		}
 		else {
 			products = StringUtil.getStringNames(productKeySplit[0]);
 
-			this.keyArrangement(products, result, PRODUCT);
+			this.keyArrangement(products, description, PRODUCT);
 		}
 		
 		// 위 방법으로 검출이 안될 경우 - 단위로 잘라서 한번 더..
@@ -185,79 +191,91 @@ public class ScraperService {
 				vendors = StringUtil.getStringNamesIncludeDash(productKeySplit[0]);
 				products = StringUtil.getStringNamesIncludeDash(productKeySplit[1]);
 
-				this.keyArrangement(products, result, PRODUCT);
-				this.keyArrangement(vendors, result, VENDOR);
+				this.keyArrangement(products, description, PRODUCT);
+				this.keyArrangement(this.dealRepetition(vendors, products), description, VENDOR);
 			}
 			else {
 				products = StringUtil.getStringNamesIncludeDash(productKeySplit[0]);
 
-				this.keyArrangement(products, result, PRODUCT);
+				this.keyArrangement(products, description, PRODUCT);
 			}
 		}
 
 	}
 	
-	private void keyArrangement(String[] str, StringBuffer description, final String type) {		
-//		if (type.compareTo(PRODUCT) == 0) {
-			// 대소문자 구분을 위해..
-			for (String name : str) {
-				// 흔한 이름 제외..
-				boolean flag = StringUtils.containsIgnoreCase(description, "apache") || StringUtils.containsIgnoreCase(description, "com") 
-						|| StringUtils.containsIgnoreCase(description, "org") || StringUtils.containsIgnoreCase(description, "net")
-						|| StringUtils.containsIgnoreCase(description, "rt") || StringUtils.containsIgnoreCase(description, "api");
+	/**
+	 * vendor 이름이 product랑 겹치는 경우 건너띄기
+	 * @param vendors
+	 * @param products
+	 * @return
+	 */
+	private String[] dealRepetition(String[] vendors, String[] products) {
+		String[] tmp = vendors.clone();
+		for (String product : products) {
+			for (String vendor : vendors) {					
+				boolean flag = this.checkException(vendor);
 				if (flag) {
 					continue;
 				}
 				
-				int index = StringUtils.indexOfIgnoreCase(description, name);
-				if (index > -1) {
-					name = description.substring(index, index + name.length());
-					// 정보 입력 
-					int beginIndexEnd = index+name.length()+1;
-					int beginIndexStart = index-2;
-					try {
-						String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
-						String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
-						if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
-							description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
-						}
-					} catch (StringIndexOutOfBoundsException e) {
-						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
-						continue;
-					}
-
+				if(StringUtils.containsIgnoreCase(product, vendor)) {
+					tmp = ArrayUtils.removeElement(tmp, vendor);
 				}
-			}			
-//		} 
-//		else if (type.compareTo(VENDOR) == 0) {
-//			for (String vendor : str) {
-//				// 흔한 이름 제외..
-//				boolean flag = StringUtils.containsIgnoreCase(description, "apache") || StringUtils.containsIgnoreCase(description, "com") 
-//						|| StringUtils.containsIgnoreCase(description, "org") || StringUtils.containsIgnoreCase(description, "net")
-//						|| StringUtils.containsIgnoreCase(description, "rt") || StringUtils.containsIgnoreCase(description, "api");
-//				if (flag) {
-//					continue;
-//				}
-//				
-//				int index = StringUtils.indexOfIgnoreCase(description, vendor);
-//				if (index > -1) {
-//					vendor = description.substring(index, index + vendor.length());
-//
-//					int beginIndexEnd = index+vendor.length()+1;
-//					int beginIndexStart = index-2;
-//					try {
-//						String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
-//						String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
-//						if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
-//							description.replace(index, index + vendor.length(), " "+VENDOR +" "+ vendor+" " + END+" ");
-//						}
-//					} catch (StringIndexOutOfBoundsException e) {
-//						description.replace(index, index + vendor.length(), " "+VENDOR +" "+ vendor+" " + END+" ");
-//						continue;
-//					}
-//				}
-//			}
-//		}
+			}
+		}
+		return tmp;
+	}
+	
+	/**
+	 * 
+	 * @param str
+	 * @param description
+	 * @param type
+	 */
+	private void keyArrangement(String[] str, StringBuffer description, final String type) {		
+		// 대소문자 구분을 위해..
+		for (String name : str) {
+			// 흔한 이름 제외..
+			boolean flag = this.checkException(name);
+			if (flag) {
+				continue;
+			}
+			
+			int index = StringUtils.indexOfIgnoreCase(description, name);
+			if (index > -1) {
+				// 특수사항 제외 - tar로 START에 일부 읽히는 경우 
+				if(description.substring(index, index+name.length()).equals(name.toUpperCase())) {
+					continue;
+				}
+				name = description.substring(index, index + name.length());
+				// 정보 입력 
+				int beginIndexEnd = index+name.length()+1;
+				int beginIndexStart = index-2;
+				try {
+					String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
+					String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
+					if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
+						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
+					}
+				} catch (StringIndexOutOfBoundsException e) {
+					description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
+					continue;
+				}
+
+			}
+		}			
+	}
+	
+	/**
+	 * 흔한 이름 정리하기 
+	 * @param name
+	 * @return
+	 */
+	private boolean checkException(String name) {
+		return StringUtils.equalsIgnoreCase(name, "apache") || StringUtils.equalsIgnoreCase(name, "com") 
+		|| StringUtils.equalsIgnoreCase(name, "org") || StringUtils.equalsIgnoreCase(name, "net")
+		|| StringUtils.equalsIgnoreCase(name, "rt") || StringUtils.equalsIgnoreCase(name, "api")
+		|| StringUtils.equalsIgnoreCase(name, "ro");
 	}
 	
 	/**
@@ -268,8 +286,8 @@ public class ScraperService {
 		MarkableFileInputStreamFactory inputStreamFactory = new MarkableFileInputStreamFactory(new File("vendor-product.train"));
 		ObjectStream<String> lineStream = new PlainTextByLineStream(inputStreamFactory, StandardCharsets.UTF_8);
 		TokenNameFinderModel model = null;
-		TokenNameFinderFactory nameFinderFactory = new TokenNameFinderFactory();
-
+		TokenNameFinderFactory nameFinderFactory = new TokenNameFinderFactory();		
+		
 		try (ObjectStream<NameSample> sampleStream = new NameSampleDataStream(lineStream)) {
 			model = NameFinderME.train("en", null, sampleStream, TrainingParameters.defaultParams(), nameFinderFactory);
 		} catch(Exception e) {
