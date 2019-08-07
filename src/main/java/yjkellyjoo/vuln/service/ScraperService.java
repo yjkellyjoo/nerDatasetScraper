@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -28,7 +27,6 @@ import opennlp.tools.namefind.TokenNameFinderModel;
 import opennlp.tools.util.MarkableFileInputStreamFactory;
 import opennlp.tools.util.ObjectStream;
 import opennlp.tools.util.PlainTextByLineStream;
-import opennlp.tools.util.Span;
 import opennlp.tools.util.TrainingParameters;
 
 import yjkellyjoo.runtime.util.StringUtil;
@@ -145,6 +143,7 @@ public class ScraperService {
 
 	}
 	
+	
 	/**
 	 * description에 vendor와 product 정보 기입 
 	 * @param productKeySplit
@@ -176,7 +175,7 @@ public class ScraperService {
 			// 흔한 이름 정리 
 			boolean flag = this.checkException(name);
 			if (flag) {
-				ArrayUtils.removeElement(tmp, name);
+				tmp = ArrayUtils.removeElement(tmp, name);
 			}
 		}
 		
@@ -185,41 +184,6 @@ public class ScraperService {
 		String[] result = linked.toArray(new String[] {});
 		
 		return result;
-	}
-	
-	/**
-	 * 
-	 * @param str
-	 * @param description
-	 * @param type
-	 */
-	private void keyArrangement(String[] str, StringBuffer description, final String type) {		
-		// 대소문자 구분을 위해..
-		for (String name : str) {
-			int index = StringUtils.indexOfIgnoreCase(description, name);
-			if (index > -1) {
-				// 특수사항 제외 - tar로 START에 일부 읽히는 경우 
-				if(description.substring(index, index+name.length()).equals(name.toUpperCase())) {
-					continue;
-				}
-				name = description.substring(index, index + name.length());
-				// 정보 입력 
-				int beginIndexEnd = index+name.length()+1;
-				int beginIndexStart = index-2;
-				try {
-					String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
-					String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
-					if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
-						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
-					}
-				} catch (StringIndexOutOfBoundsException e) {
-					// 단어가 문장의 맨 앞 혹은 맨 끝에 있고 앞뒤로 태그가 아직 안 달렸음 
-					description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
-					continue;
-				}
-
-			}
-		}			
 	}
 	
 	/**
@@ -233,6 +197,81 @@ public class ScraperService {
 		|| StringUtils.equalsIgnoreCase(name, "rt") || StringUtils.equalsIgnoreCase(name, "api")
 		|| StringUtils.equalsIgnoreCase(name, "ro");
 	}
+	
+	
+	/**
+	 * 
+	 * @param str
+	 * @param description
+	 * @param type
+	 */
+	private void keyArrangement(String[] names, StringBuffer description, final String type) {	
+		for (int i = names.length-1; i >= 0; i--) {
+			for (int j = 0; j < names.length - i; j++) {
+				StringBuffer name = new StringBuffer("");
+				for (int k = 0; k <= i; k++) {
+					name.append(names[k] + " ");
+				}
+				name.delete(name.length()-1, name.length());
+				
+				int index = StringUtils.indexOfIgnoreCase(description, name.toString());
+				// description에서 정보 발견 
+				if (index > -1) {
+					// 특수상황 제외 - tar로 START에 일부 읽히는 경우 
+					if(description.substring(index, index+name.length()).equals(name.toString().toUpperCase())) {
+						continue;
+					}
+					name.replace(0, name.length()+1, description.substring(index, index + name.length()));
+					// 정보 입력 
+					int beginIndexEnd = index+name.length()+1;
+					int beginIndexStart = index-2;
+					try {
+						String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
+						String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
+						if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
+							description = new StringBuffer(description.toString().replaceAll(name.toString(), " "+type +" "+ name.toString()+" " + END+" "));
+//							description.replace(index, index + name.length(), " "+type +" "+ name.toString()+" " + END+" ");
+						}
+					} catch (StringIndexOutOfBoundsException e) {
+						// 단어가 문장의 맨 앞 혹은 맨 끝에 있고 앞뒤로 태그가 아직 안 달렸음 
+						description = new StringBuffer(description.toString().replaceAll(name.toString(), " "+type +" "+ name.toString()+" " + END+" "));
+//						description.replace(index, index + name.length(), " "+type +" "+ name.toString()+" " + END+" ");
+						continue;
+					}
+					
+					return;
+				}
+			}
+		}
+		
+//		for (String name : names) {
+//			int index = StringUtils.indexOfIgnoreCase(description, name);
+//			if (index > -1) {
+//				// 특수상황 제외 - tar로 START에 일부 읽히는 경우 
+//				if(description.substring(index, index+name.length()).equals(name.toUpperCase())) {
+//					continue;
+//				}
+//				name = description.substring(index, index + name.length());
+//				// 정보 입력 
+//				int beginIndexEnd = index+name.length()+1;
+//				int beginIndexStart = index-2;
+//				try {
+//					String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
+//					String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
+//					if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
+//						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
+//					}
+//				} catch (StringIndexOutOfBoundsException e) {
+//					// 단어가 문장의 맨 앞 혹은 맨 끝에 있고 앞뒤로 태그가 아직 안 달렸음 
+//					description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
+//					continue;
+//				}
+//
+//			}
+//		}		
+		
+	}
+
 	
 	/**
 	 * model 학습시키기
