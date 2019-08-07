@@ -6,7 +6,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import javax.annotation.Resource;
@@ -56,8 +58,7 @@ public class ScraperService {
 	@Resource(name="yjkellyjoo.vuln.dao.CveDao")
 	private CveDao cveDao;
 	
-	private final String VENDOR = "<START:vendor>";
-	private final String PRODUCT = "<START:product>";
+	private final String NAME = "<START:name>";
 	private final String END = "<END>";
 
 	
@@ -118,27 +119,9 @@ public class ScraperService {
 		for (int i = 0; i < vulnLibInfo.size(); i++) {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
+			
+			this.manageProductKey(productVo.getProductKey(), description);
 
-			try {
-				if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
-						String tmp[] = productVo.getName().split("/");
-						this.manageProductKey(tmp, description);
-				}
-				else {
-						String tmp[] = productVo.getProductKey().split(":");
-						this.manageProductKey(tmp, description);
-				}
-				
-			} catch (NullPointerException e){
-				File error = new File("Null_error.txt");
-				try {
-				FileUtils.writeStringToFile(error, vulnLib.getRefId() +", "+ vulnLibInfo.get(i).getLangauage() +", "+ vulnLibInfo.get(i).getRepository() +", "+ vulnLibInfo.get(i).getProductKey()+"\n", StandardCharsets.UTF_8, true);
-				
-				} catch(IOException ex) {
-					ex.printStackTrace();
-				}
-				e.printStackTrace();
-			}
 			
 		}
 		
@@ -168,62 +151,40 @@ public class ScraperService {
 	 * @param description
 	 * @return
 	 */
-	private void manageProductKey(String[] productKeySplit, StringBuffer description) {
-		String[] vendors, products;
+	private void manageProductKey(String productKeySplit, StringBuffer description) {
+		String[] names;
 		
-		if (productKeySplit.length == 2) {
-			vendors = StringUtil.getStringNames(productKeySplit[0]);
-			products = StringUtil.getStringNames(productKeySplit[1]);
-
-			this.keyArrangement(products, description, PRODUCT);
-			this.keyArrangement(this.dealRepetition(vendors, products), description, VENDOR);
+		names = StringUtil.getStringNames(productKeySplit);
+		this.keyArrangement(this.arrangeNames(names), description, NAME);
 			
-		}
-		else {
-			products = StringUtil.getStringNames(productKeySplit[0]);
-
-			this.keyArrangement(products, description, PRODUCT);
-		}
-		
-		// 위 방법으로 검출이 안될 경우 - 단위로 잘라서 한번 더..
+		// 위 방법으로 검출이 안될 경우 '-' 단위로 잘라서 한번 더..
 		if (!description.toString().contains(END)) {
-			if (productKeySplit.length == 2) {
-				vendors = StringUtil.getStringNamesIncludeDash(productKeySplit[0]);
-				products = StringUtil.getStringNamesIncludeDash(productKeySplit[1]);
-
-				this.keyArrangement(products, description, PRODUCT);
-				this.keyArrangement(this.dealRepetition(vendors, products), description, VENDOR);
-			}
-			else {
-				products = StringUtil.getStringNamesIncludeDash(productKeySplit[0]);
-
-				this.keyArrangement(products, description, PRODUCT);
-			}
+			names = StringUtil.getStringNamesIncludeDash(productKeySplit);
+			this.keyArrangement(this.arrangeNames(names), description, NAME);
 		}
 
 	}
 	
 	/**
-	 * vendor 이름이 product랑 겹치는 경우 건너띄기
-	 * @param vendors
-	 * @param products
+	 * 이름들이 겹치는 경우와 흔한 이름들 정리하기
+	 * @param names
 	 * @return
 	 */
-	private String[] dealRepetition(String[] vendors, String[] products) {
-		String[] tmp = vendors.clone();
-		for (String product : products) {
-			for (String vendor : vendors) {					
-				boolean flag = this.checkException(vendor);
-				if (flag) {
-					continue;
-				}
-				
-				if(StringUtils.containsIgnoreCase(product, vendor)) {
-					tmp = ArrayUtils.removeElement(tmp, vendor);
-				}
+	private String[] arrangeNames(String[] names) {
+		String[] tmp = names.clone();
+		for (String name : names) {
+			// 흔한 이름 정리 
+			boolean flag = this.checkException(name);
+			if (flag) {
+				ArrayUtils.removeElement(tmp, name);
 			}
 		}
-		return tmp;
+		
+		// 겹치는 경우 정리 
+		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(tmp));
+		String[] result = linked.toArray(new String[] {});
+		
+		return result;
 	}
 	
 	/**
@@ -235,12 +196,6 @@ public class ScraperService {
 	private void keyArrangement(String[] str, StringBuffer description, final String type) {		
 		// 대소문자 구분을 위해..
 		for (String name : str) {
-			// 흔한 이름 제외..
-			boolean flag = this.checkException(name);
-			if (flag) {
-				continue;
-			}
-			
 			int index = StringUtils.indexOfIgnoreCase(description, name);
 			if (index > -1) {
 				// 특수사항 제외 - tar로 START에 일부 읽히는 경우 
@@ -258,6 +213,7 @@ public class ScraperService {
 						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
 					}
 				} catch (StringIndexOutOfBoundsException e) {
+					// 단어가 문장의 맨 앞 혹은 맨 끝에 있고 앞뒤로 태그가 아직 안 달렸음 
 					description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
 					continue;
 				}

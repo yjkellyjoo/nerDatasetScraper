@@ -110,13 +110,13 @@ public class StringUtil {
 	}
 	
 	public static String[] getStringNames(String raw) {
-		raw = raw.replaceAll("[0-9]", "");
+		raw = raw.replaceAll("@", "");
 		String[] tmp = raw.split("\\.|_|'");
 		return tmp;
 	}
 
 	public static String[] getStringNamesIncludeDash(String raw) {
-		raw = raw.replaceAll("[0-9]", "");
+		raw = raw.replaceAll("@", "");
 		String[] tmp = raw.split("\\.|_|-|'");
 		return tmp;
 	}
