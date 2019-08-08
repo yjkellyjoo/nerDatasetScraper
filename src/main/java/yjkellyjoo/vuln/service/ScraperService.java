@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import javax.annotation.Resource;
 
@@ -113,18 +114,24 @@ public class ScraperService {
 		
 		// description에 vendor와 product 정보 기입 
 		CveVo cve = cveDao.selectCve(vulnLib.getRefId());
-		StringBuffer description = new StringBuffer(cve.getDescriptionString());
+		String result = new String(cve.getDescriptionString());
+
 		for (int i = 0; i < vulnLibInfo.size(); i++) {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			
-			this.manageProductKey(productVo.getProductKey(), description);
-
-			
+			if (cve.getId().equals("CVE-2016-9910")) {
+				boolean flag=true;
+			}
+			if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
+				result = this.manageProductKey(productVo.getName(), result);
+			} else {
+				result = this.manageProductKey(productVo.getProductKey(), result);
+			}
 		}
 		
 		// double space 정리
-		String result = description.toString().replaceAll("  ", " ");
+		result = result.replaceAll("  ", " ");
 		
 		// description 문장들 file로 저장 
 		try {
@@ -150,29 +157,32 @@ public class ScraperService {
 	 * @param description
 	 * @return
 	 */
-	private void manageProductKey(String productKeySplit, StringBuffer description) {
+	private String manageProductKey(String productKeySplit, String description) {
 		String[] names;
+		String result;
 		
 		names = StringUtil.getStringNames(productKeySplit);
-		this.keyArrangement(this.arrangeNames(names), description, NAME);
+		result = this.keyArrangement(this.arrangeNames(names), description, NAME);
 			
 		// 위 방법으로 검출이 안될 경우 '-' 단위로 잘라서 한번 더..
-		if (!description.toString().contains(END)) {
+		if (!result.toString().contains(END)) {
 			names = StringUtil.getStringNamesIncludeDash(productKeySplit);
-			this.keyArrangement(this.arrangeNames(names), description, NAME);
+			result = this.keyArrangement(this.arrangeNames(names), description, NAME);
 		}
-
+		
+		return result;
 	}
 	
 	/**
-	 * 이름들이 겹치는 경우와 흔한 이름들 정리하기
+	 * 이름들 정리하기
 	 * @param names
 	 * @return
 	 */
 	private String[] arrangeNames(String[] names) {
+		
+		// 흔한 이름 정리 
 		String[] tmp = names.clone();
 		for (String name : names) {
-			// 흔한 이름 정리 
 			boolean flag = this.checkException(name);
 			if (flag) {
 				tmp = ArrayUtils.removeElement(tmp, name);
@@ -182,6 +192,13 @@ public class ScraperService {
 		// 겹치는 경우 정리 
 		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(tmp));
 		String[] result = linked.toArray(new String[] {});
+		
+		// 숫자만 있는 경우 정리
+		for (String name : result) {
+			if (Pattern.matches("[^a-zA-Z]+", name)) {
+				result = ArrayUtils.removeElement(result, name);
+			}
+		}
 		
 		return result;
 	}
@@ -205,70 +222,53 @@ public class ScraperService {
 	 * @param description
 	 * @param type
 	 */
-	private void keyArrangement(String[] names, StringBuffer description, final String type) {	
-		for (int i = names.length-1; i >= 0; i--) {
-			for (int j = 0; j < names.length - i; j++) {
-				StringBuffer name = new StringBuffer("");
-				for (int k = 0; k <= i; k++) {
-					name.append(names[k] + " ");
-				}
-				name.delete(name.length()-1, name.length());
-				
-				int index = StringUtils.indexOfIgnoreCase(description, name.toString());
-				// description에서 정보 발견 
-				if (index > -1) {
-					// 특수상황 제외 - tar로 START에 일부 읽히는 경우 
-					if(description.substring(index, index+name.length()).equals(name.toString().toUpperCase())) {
-						continue;
+	private String keyArrangement(String[] names, String description, final String type) {	
+
+		for (int i = names.length; i > 0; i--) {
+			int startIndex = 0;
+			int endIndex = i;
+			int count = names.length - i + 1;
+			boolean checkChange = false; 
+			
+			while ( count != 0 ) {
+				final String[] INBETWEENS = {" ", "/", ":", "."};
+				for (String inBetween : INBETWEENS) {
+					StringBuffer name = new StringBuffer("");
+					for (int j = startIndex; j < endIndex; j++) {
+						name.append(names[j] + inBetween);
 					}
-					name.replace(0, name.length()+1, description.substring(index, index + name.length()));
-					// 정보 입력 
-					int beginIndexEnd = index+name.length()+1;
-					int beginIndexStart = index-2;
-					try {
-						String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
-						String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
-						if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
-							description = new StringBuffer(description.toString().replaceAll(name.toString(), " "+type +" "+ name.toString()+" " + END+" "));
-//							description.replace(index, index + name.length(), " "+type +" "+ name.toString()+" " + END+" ");
+					name.delete(name.length()-1, name.length());
+
+					int index = StringUtils.indexOfIgnoreCase(description, name.toString());
+					// description에서 정보 발견 
+					if (index > -1) {
+						name.replace(0, name.length()+1, description.substring(index, index + name.length()));
+						// 정보 입력 
+						int beginIndexEnd = index+name.length()+1;
+						// Span이 겹치지 않는지 확인 
+						String cmpEnd = new String(description.substring(beginIndexEnd, description.length()));
+						int indEnd = cmpEnd.indexOf(END);
+						int indName = cmpEnd.indexOf(NAME);
+						if ((indEnd == -1 && indName == -1) || (indEnd > indName && indName != -1)) {
+							StringBuffer tmp = new StringBuffer(description);
+							tmp.replace(index, index+name.length(), " "+type +" "+ name.toString()+" " + END+" ");
+							description = new String(tmp.toString());
+//								description = new String(description.replace(name, " "+type +" "+ name.toString()+" " + END+" "));
+							checkChange = true;
 						}
-					} catch (StringIndexOutOfBoundsException e) {
-						// 단어가 문장의 맨 앞 혹은 맨 끝에 있고 앞뒤로 태그가 아직 안 달렸음 
-						description = new StringBuffer(description.toString().replaceAll(name.toString(), " "+type +" "+ name.toString()+" " + END+" "));
-//						description.replace(index, index + name.length(), " "+type +" "+ name.toString()+" " + END+" ");
-						continue;
 					}
-					
-					return;
 				}
+				startIndex++;
+				endIndex++;
+				count--;
+			}
+			
+			if (checkChange) {
+				return description;				
 			}
 		}
 		
-//		for (String name : names) {
-//			int index = StringUtils.indexOfIgnoreCase(description, name);
-//			if (index > -1) {
-//				// 특수상황 제외 - tar로 START에 일부 읽히는 경우 
-//				if(description.substring(index, index+name.length()).equals(name.toUpperCase())) {
-//					continue;
-//				}
-//				name = description.substring(index, index + name.length());
-//				// 정보 입력 
-//				int beginIndexEnd = index+name.length()+1;
-//				int beginIndexStart = index-2;
-//				try {
-//					String cmpEnd = new String(description.substring(beginIndexEnd, beginIndexEnd+END.length()));
-//					String cmpStart = new String(description.substring(beginIndexStart, beginIndexStart+1));
-//					if (cmpEnd.compareTo(END) != 0 && cmpStart.compareTo(">") != 0) {
-//						description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
-//					}
-//				} catch (StringIndexOutOfBoundsException e) {
-//					// 단어가 문장의 맨 앞 혹은 맨 끝에 있고 앞뒤로 태그가 아직 안 달렸음 
-//					description.replace(index, index + name.length(), " "+type +" "+ name+" " + END+" ");
-//					continue;
-//				}
-//
-//			}
-//		}		
+		return description;
 		
 	}
 
