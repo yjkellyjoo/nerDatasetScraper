@@ -250,6 +250,7 @@ public class ScraperService {
 						int indEnd = cmpEnd.indexOf(END);
 						int indName = cmpEnd.indexOf(NAME);
 						if ((indEnd == -1 && indName == -1) || (indEnd > indName && indName != -1)) {
+							
 							// 괄호 안에 있거나, 단독 단어일 경우에만 저장 
 							try {
 								boolean before = description.substring(index-1, index).matches("[ (]");
@@ -305,7 +306,7 @@ public class ScraperService {
 			return;
 		}
 		
-		File modelFile = new File("vendor-product.model");
+		File modelFile = new File("ner-organizations.bin");
 		FileOutputStream out = new FileOutputStream(modelFile); 
 		
 		try (BufferedOutputStream modelOut = new BufferedOutputStream(out)) {
