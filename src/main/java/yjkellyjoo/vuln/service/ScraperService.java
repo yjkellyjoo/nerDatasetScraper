@@ -120,7 +120,7 @@ public class ScraperService {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			
-			if (cve.getId().equals("CVE-2016-9910")) {
+			if (cve.getId().equals("CVE-2002-1148")) {
 				boolean flag=true;
 			}
 			if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
@@ -162,12 +162,12 @@ public class ScraperService {
 		String result;
 		
 		names = StringUtil.getStringNames(productKeySplit);
-		result = this.keyArrangement(this.arrangeNames(names), description, NAME);
+		result = this.keyArrangement(this.arrangeNames(names), description);
 			
 		// 위 방법으로 검출이 안될 경우 '-' 단위로 잘라서 한번 더..
 		if (!result.toString().contains(END)) {
 			names = StringUtil.getStringNamesIncludeDash(productKeySplit);
-			result = this.keyArrangement(this.arrangeNames(names), description, NAME);
+			result = this.keyArrangement(this.arrangeNames(names), description);
 		}
 		
 		return result;
@@ -180,17 +180,18 @@ public class ScraperService {
 	 */
 	private String[] arrangeNames(String[] names) {
 		
-		// 흔한 이름 정리 
-		String[] tmp = names.clone();
-		for (String name : names) {
-			boolean flag = this.checkException(name);
-			if (flag) {
-				tmp = ArrayUtils.removeElement(tmp, name);
-			}
-		}
+//		// 흔한 이름 정리 
+//		String[] tmp = names.clone();
+//		for (String name : names) {
+//			boolean flag = this.checkException(name);
+//			if (flag) {
+//				tmp = ArrayUtils.removeElement(tmp, name);
+//			}
+//		}
 		
 		// 겹치는 경우 정리 
-		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(tmp));
+//		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(tmp));
+		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(names));
 		String[] result = linked.toArray(new String[] {});
 		
 		// 숫자만 있는 경우 정리
@@ -220,9 +221,8 @@ public class ScraperService {
 	 * 
 	 * @param str
 	 * @param description
-	 * @param type
 	 */
-	private String keyArrangement(String[] names, String description, final String type) {	
+	private String keyArrangement(String[] names, String description) {	
 
 		for (int i = names.length; i > 0; i--) {
 			int startIndex = 0;
@@ -231,7 +231,7 @@ public class ScraperService {
 			boolean checkChange = false; 
 			
 			while ( count != 0 ) {
-				final String[] INBETWEENS = {" ", "/", ":", "."};
+				final String[] INBETWEENS = {" ", ".", "_"};
 				for (String inBetween : INBETWEENS) {
 					StringBuffer name = new StringBuffer("");
 					for (int j = startIndex; j < endIndex; j++) {
@@ -243,31 +243,43 @@ public class ScraperService {
 					// description에서 정보 발견 
 					if (index > -1) {
 						name.replace(0, name.length()+1, description.substring(index, index + name.length()));
-						// 정보 입력 
-						int beginIndexEnd = index+name.length()+1;
+
 						// Span이 겹치지 않는지 확인 
+						int beginIndexEnd = index+name.length();
 						String cmpEnd = new String(description.substring(beginIndexEnd, description.length()));
 						int indEnd = cmpEnd.indexOf(END);
 						int indName = cmpEnd.indexOf(NAME);
 						if ((indEnd == -1 && indName == -1) || (indEnd > indName && indName != -1)) {
-							StringBuffer tmp = new StringBuffer(description);
-							tmp.replace(index, index+name.length(), " "+type +" "+ name.toString()+" " + END+" ");
-							description = new String(tmp.toString());
+							// 괄호 안에 있거나, 단독 단어일 경우에만 저장 
+							try {
+								boolean before = description.substring(index-1, index).matches("[ (]");
+								boolean after = description.substring(index+name.length(), index+name.length()+1).matches("[ )]");
+								if (before && after) {
+									StringBuffer tmp = new StringBuffer(description);
+									tmp.replace(index, index+name.length(), " "+NAME+" " + name.toString() + " "+END+" ");
+									description = new String(tmp.toString());
+//										description = new String(description.replace(name, " "+type +" "+ name.toString()+" " + END+" "));
+									checkChange = true;								
+								}					
+							} catch(StringIndexOutOfBoundsException e) {
+								StringBuffer tmp = new StringBuffer(description);
+								tmp.replace(index, index+name.length(), " "+NAME+" " + name.toString() + " "+END+" ");
+								description = new String(tmp.toString());
 //								description = new String(description.replace(name, " "+type +" "+ name.toString()+" " + END+" "));
-							checkChange = true;
+								checkChange = true;	
+							}
 						}
 					}
 				}
 				startIndex++;
 				endIndex++;
 				count--;
-			}
 			
-			if (checkChange) {
-				return description;				
+				if (checkChange) {
+					return description;				
+				}
 			}
 		}
-		
 		return description;
 		
 	}
