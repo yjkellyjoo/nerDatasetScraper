@@ -1,14 +1,13 @@
 package yjkellyjoo.vuln.service;
 
-import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
 import javax.annotation.Resource;
@@ -20,15 +19,8 @@ import org.springframework.stereotype.Service;
 
 import lombok.extern.slf4j.Slf4j;
 
-import opennlp.tools.namefind.NameFinderME;
-import opennlp.tools.namefind.NameSample;
-import opennlp.tools.namefind.NameSampleDataStream;
-import opennlp.tools.namefind.TokenNameFinderFactory;
-import opennlp.tools.namefind.TokenNameFinderModel;
-import opennlp.tools.util.MarkableFileInputStreamFactory;
-import opennlp.tools.util.ObjectStream;
-import opennlp.tools.util.PlainTextByLineStream;
-import opennlp.tools.util.TrainingParameters;
+import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.pipeline.*;
 
 import yjkellyjoo.runtime.util.StringUtil;
 import yjkellyjoo.vuln.dao.CveDao;
@@ -57,8 +49,9 @@ public class ScraperService {
 	@Resource(name="yjkellyjoo.vuln.dao.CveDao")
 	private CveDao cveDao;
 	
-	private final String NAME = "<START:name>";
-	private final String END = "<END>";
+	private final String BNAME = "\tB-NAME";
+	private final String INAME = "\tI-NAME";
+	private final String OUT = "\t0";
 
 	
 	/**
@@ -74,11 +67,11 @@ public class ScraperService {
 			this.manageDescription(vulnLibraryVo);
 		}
 		
-		try {
-			this.trainModel();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+//		try {
+//			this.trainModel();
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
 	}
 
 	/**
@@ -98,7 +91,7 @@ public class ScraperService {
 			tmp.setLangauage(vuln.getLangauage());
 			tmp.setRepository(vuln.getRepository());
 			tmp.setProductKey(vuln.getProductKey());
-//			log.info("productVo: {}, {}, {} ", tmp.getLangauage(), tmp.getRepository(), tmp.getProductKey());
+			log.debug("productVo: {}, {}, {} ", tmp.getLangauage(), tmp.getRepository(), tmp.getProductKey());
 
 			boolean flag = true;
 			for (int i = 0; i < vulnLibInfo.size(); i++) {
@@ -108,21 +101,39 @@ public class ScraperService {
 			}
 			if (flag) {
 				vulnLibInfo.add(tmp);
-//				log.info("added");
+				log.debug("added");
 			}
 		}
 		
-		// description에 vendor와 product 정보 기입 
+		// description에 name 정보 기입 
 		CveVo cve = cveDao.selectCve(vulnLib.getRefId());
-		String result = new String(cve.getDescriptionString());
-
+		String description = new String(cve.getDescriptionString());
+		
+		// description String tokenize
+	    Properties props = new Properties();
+	    props.setProperty("annotators", "tokenize,ssplit");
+		StanfordCoreNLP pipeline = new StanfordCoreNLP(props);
+		CoreDocument doc = new CoreDocument(description);
+		pipeline.annotate(doc);
+		
+		List<CoreLabel> tokens = doc.sentences().get(0).tokens();
+		String result[][] = new String[2][tokens.size()];
+		int j = 0;
+		for (CoreLabel token : tokens) {
+			result[0][j] = token.word();
+			result[1][j] = OUT;
+			j++;
+		}
+		
+		// name 정보 기입 
 		for (int i = 0; i < vulnLibInfo.size(); i++) {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			
-			if (cve.getId().equals("CVE-2002-1148")) {
-				boolean flag=true;
-			}
+//			if (cve.getId().equals("CVE-2002-1148")) {
+//				boolean flag=true;
+//			}
+			
 			if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
 				result = this.manageProductKey(productVo.getName(), result);
 			} else {
@@ -130,19 +141,24 @@ public class ScraperService {
 			}
 		}
 		
-		// double space 정리
-		result = result.replaceAll("  ", " ");
+		StringBuffer desc = new StringBuffer();
+		for (int i = 0; i < result[0].length; i++) {
+			desc.append(result[0][i]);
+			desc.append(result[1][i]);
+			desc.append("\n");
+		}
+		description = desc.toString();
 		
 		// description 문장들 file로 저장 
 		try {
-			if (result.contains(END)) {
-				File trainData = new File("vendor-product.train");
+			if (description.contains(BNAME)) {
+				File trainData = new File("product_names.train");
 
-//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
-				FileUtils.writeStringToFile(trainData, result+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -157,18 +173,12 @@ public class ScraperService {
 	 * @param description
 	 * @return
 	 */
-	private String manageProductKey(String productKeySplit, String description) {
+	private String[][] manageProductKey(String productKeySplit, String[][] description) {
 		String[] names;
-		String result;
+		String[][] result;
 		
-		names = StringUtil.getStringNames(productKeySplit);
+		names = StringUtil.getStringNamesIncludeDash(productKeySplit);
 		result = this.keyArrangement(this.arrangeNames(names), description);
-			
-		// 위 방법으로 검출이 안될 경우 '-' 단위로 잘라서 한번 더..
-		if (!result.toString().contains(END)) {
-			names = StringUtil.getStringNamesIncludeDash(productKeySplit);
-			result = this.keyArrangement(this.arrangeNames(names), description);
-		}
 		
 		return result;
 	}
@@ -222,8 +232,8 @@ public class ScraperService {
 	 * @param str
 	 * @param description
 	 */
-	private String keyArrangement(String[] names, String description) {	
-
+	private String[][] keyArrangement(String[] names, String[][] description) {	
+		// 제일 긴 Noun Phrase 서부터 하나씩 검출하기 
 		for (int i = names.length; i > 0; i--) {
 			int startIndex = 0;
 			int endIndex = i;
@@ -231,7 +241,9 @@ public class ScraperService {
 			boolean checkChange = false; 
 			
 			while ( count != 0 ) {
-				final String[] INBETWEENS = {" ", ".", "_"};
+				
+				// (1) NP delimiter가 ., -, /인 경우 확인 
+				final String[] INBETWEENS = {".", "-", "/"};
 				for (String inBetween : INBETWEENS) {
 					StringBuffer name = new StringBuffer("");
 					for (int j = startIndex; j < endIndex; j++) {
@@ -239,81 +251,98 @@ public class ScraperService {
 					}
 					name.delete(name.length()-1, name.length());
 
-					int index = StringUtils.indexOfIgnoreCase(description, name.toString());
-					// description에서 정보 발견 
-					if (index > -1) {
-						name.replace(0, name.length()+1, description.substring(index, index + name.length()));
-
+					// description에서 정보 검출하기 
+					int[] nameIndex = {-1,-1,-1,-1,-1,-1,-1,-1};
+					int count1 = 0;
+					for (int j = 0; j < description[0].length; j++) {
+						if (description[0][j].toLowerCase().compareTo(name.toString().toLowerCase()) == 0) {
+							nameIndex[count1] = j;
+							count1++;
+						}
+					}
+					
+					if (nameIndex[0] != -1) {
 						// Span이 겹치지 않는지 확인 
-						int beginIndexEnd = index+name.length();
-						String cmpEnd = new String(description.substring(beginIndexEnd, description.length()));
-						int indEnd = cmpEnd.indexOf(END);
-						int indName = cmpEnd.indexOf(NAME);
-						if ((indEnd == -1 && indName == -1) || (indEnd > indName && indName != -1)) {
-							
-							// 괄호 안에 있거나, 단독 단어일 경우에만 저장 
-							try {
-								boolean before = description.substring(index-1, index).matches("[ (]");
-								boolean after = description.substring(index+name.length(), index+name.length()+1).matches("[ )]");
-								if (before && after) {
-									StringBuffer tmp = new StringBuffer(description);
-									tmp.replace(index, index+name.length(), " "+NAME+" " + name.toString() + " "+END+" ");
-									description = new String(tmp.toString());
-//										description = new String(description.replace(name, " "+type +" "+ name.toString()+" " + END+" "));
-									checkChange = true;								
-								}					
-							} catch(StringIndexOutOfBoundsException e) {
-								StringBuffer tmp = new StringBuffer(description);
-								tmp.replace(index, index+name.length(), " "+NAME+" " + name.toString() + " "+END+" ");
-								description = new String(tmp.toString());
-//								description = new String(description.replace(name, " "+type +" "+ name.toString()+" " + END+" "));
-								checkChange = true;	
+						if (description[1][nameIndex[0]].compareTo(OUT) == 0) {
+							for (int j = 0; j < count1; j++) {
+								description[1][nameIndex[j]] = BNAME;
 							}
+							checkChange = true;
 						}
 					}
 				}
-				startIndex++;
-				endIndex++;
-				count--;
-			
+				
 				if (checkChange) {
 					return description;				
 				}
+				
+				
+				for (int j = 0; j < description[0].length; j++) {
+					if (description[0][j].toLowerCase().compareTo(names[startIndex].toLowerCase()) == 0) {
+						// (2) NP delimiter가 " "인 경우 확인 
+						int full = 1;
+						for (int k = startIndex+1; k < endIndex; k++) {
+							if (description[0][j+full].toLowerCase().compareTo(names[k].toLowerCase()) == 0) {
+								full++;
+							} else {
+								break;
+							}
+						}
+						
+						if (full == i && description[1][j].compareTo(OUT) == 0) {
+							description[1][j] = BNAME;
+							for (int k = 1; k < i; k++) {
+								description[1][j+k] = INAME;
+							}
+							checkChange = true;
+						}
+						
+						// (3) NP delimiter가 "_"인 경우 확인 
+						full = 2;
+						for (int k = startIndex+1; k < endIndex; k++) {
+							if (description[0][j+full].toLowerCase().compareTo(names[k].toLowerCase()) == 0) {
+								full+=2;
+							} else {
+								break;
+							}
+						}
+						
+						if (full == i*2 && description[1][j].compareTo(OUT) == 0) {
+							description[1][j] = BNAME;
+							for (int k = 2; k < i; k+=2) {
+								description[1][j+k] = INAME;
+							}
+							checkChange = true;
+						}
+					}
+				}
+				
+				if (checkChange) {
+					return description;				
+				}
+				
+				
+				for (int j = 0; j < description[0].length; j++) {
+					if (description[0][j].toLowerCase().compareTo(names[startIndex].toLowerCase()) == 0) {
+
+					}
+				}
+				
+				if (checkChange) {
+					return description;				
+				}
+				
+
+				startIndex++;
+				endIndex++;
+				count--;				
+
 			}
 		}
 		return description;
 		
 	}
 
-	
-	/**
-	 * model 학습시키기
-	 * @throws IOException 
-	 */
-	private void trainModel() throws IOException {
-		MarkableFileInputStreamFactory inputStreamFactory = new MarkableFileInputStreamFactory(new File("vendor-product.train"));
-		ObjectStream<String> lineStream = new PlainTextByLineStream(inputStreamFactory, StandardCharsets.UTF_8);
-		TokenNameFinderModel model = null;
-		TokenNameFinderFactory nameFinderFactory = new TokenNameFinderFactory();		
-		
-		try (ObjectStream<NameSample> sampleStream = new NameSampleDataStream(lineStream)) {
-			model = NameFinderME.train("en", null, sampleStream, TrainingParameters.defaultParams(), nameFinderFactory);
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
-		if (model == null) {
-			log.error("model not created..");
-			return;
-		}
-		
-		File modelFile = new File("ner-organizations.bin");
-		FileOutputStream out = new FileOutputStream(modelFile); 
-		
-		try (BufferedOutputStream modelOut = new BufferedOutputStream(out)) {
-		  model.serialize(modelOut);
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
-	}
+
 
 }
