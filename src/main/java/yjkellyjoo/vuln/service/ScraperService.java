@@ -14,14 +14,15 @@ import javax.annotation.Resource;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import lombok.extern.slf4j.Slf4j;
-
+import edu.stanford.nlp.ie.crf.CRFClassifier;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.pipeline.*;
+import edu.stanford.nlp.sequences.SeqClassifierFlags;
 import edu.stanford.nlp.util.logging.RedwoodConfiguration;
+import edu.stanford.nlp.util.StringUtils;
 
 import yjkellyjoo.runtime.util.StringUtil;
 import yjkellyjoo.vuln.dao.CveDao;
@@ -61,23 +62,18 @@ public class ScraperService {
 	public void perform() {
 		log.debug("performing... ");
 		
-		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
-		
-		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
-			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
-			try {
-				this.manageDescription(vulnLibraryVo);
-			} catch (Exception e) {
-				e.printStackTrace();
-				log.info(vulnLibraryVo.getRefId());
-			}
-		}
-		
-//		try {
-//			this.trainModel();
-//		} catch (IOException e) {
-//			e.printStackTrace();
+//		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
+//		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
+//			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
+//			try {
+//				this.manageDescription(vulnLibraryVo);
+//			} catch (Exception e) {
+//				e.printStackTrace();
+//				log.info(vulnLibraryVo.getRefId());
+//			}
 //		}
+		
+		this.trainModel();
 	}
 
 	/**
@@ -170,8 +166,8 @@ public class ScraperService {
 			if (desc.toString().contains(BNAME)) {
 				File trainData = new File("product_names.train");
 
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+desc.toString()+"\n", StandardCharsets.UTF_8, true);
-//				FileUtils.writeStringToFile(trainData, desc.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+desc.toString()+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, desc.toString()+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
 				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
@@ -228,18 +224,6 @@ public class ScraperService {
 		}
 		
 		return result;
-	}
-	
-	/**
-	 * 흔한 이름 정리하기 
-	 * @param name
-	 * @return
-	 */
-	private boolean checkException(String name) {
-		return StringUtils.equalsIgnoreCase(name, "apache") || StringUtils.equalsIgnoreCase(name, "com") 
-		|| StringUtils.equalsIgnoreCase(name, "org") || StringUtils.equalsIgnoreCase(name, "net")
-		|| StringUtils.equalsIgnoreCase(name, "rt") || StringUtils.equalsIgnoreCase(name, "api")
-		|| StringUtils.equalsIgnoreCase(name, "ro");
 	}
 	
 	
@@ -357,6 +341,19 @@ public class ScraperService {
 		return description;
 	}
 
-
-
+	private void trainModel() {
+		String prop = "product_names.prop";
+		String modelOutPath = "product-ner-model.ser.gz";
+		String trainingFilepath = "product_names.train";
+		
+		Properties props = StringUtils.propFileToProperties(prop);
+		props.setProperty("serializeTo", modelOutPath);
+		props.setProperty("trainFile", trainingFilepath);
+	
+		SeqClassifierFlags flags = new SeqClassifierFlags(props);
+		CRFClassifier<CoreLabel> crf = new CRFClassifier<>(flags);
+		crf.train();
+		crf.serializeClassifier(modelOutPath);
+	}
+	
 }
