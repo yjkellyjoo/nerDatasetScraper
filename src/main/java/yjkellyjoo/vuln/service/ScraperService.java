@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.pipeline.*;
+import edu.stanford.nlp.util.logging.RedwoodConfiguration;
 
 import yjkellyjoo.runtime.util.StringUtil;
 import yjkellyjoo.vuln.dao.CveDao;
@@ -64,7 +65,12 @@ public class ScraperService {
 		
 		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
 			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
-			this.manageDescription(vulnLibraryVo);
+			try {
+				this.manageDescription(vulnLibraryVo);
+			} catch (Exception e) {
+				e.printStackTrace();
+				log.info(vulnLibraryVo.getRefId());
+			}
 		}
 		
 //		try {
@@ -112,17 +118,27 @@ public class ScraperService {
 		// description String tokenize
 	    Properties props = new Properties();
 	    props.setProperty("annotators", "tokenize,ssplit");
+	    
+	    RedwoodConfiguration.current().clear().apply();
 		StanfordCoreNLP pipeline = new StanfordCoreNLP(props);
 		CoreDocument doc = new CoreDocument(description);
 		pipeline.annotate(doc);
 		
-		List<CoreLabel> tokens = doc.sentences().get(0).tokens();
-		String result[][] = new String[2][tokens.size()];
+		int tokenSize = 0;
+		for (int i = 0; i < doc.sentences().size(); i++) {
+			List<CoreLabel> tokens = doc.sentences().get(i).tokens();
+			tokenSize += tokens.size();
+		}
+		
 		int j = 0;
-		for (CoreLabel token : tokens) {
-			result[0][j] = token.word();
-			result[1][j] = OUT;
-			j++;
+		String result[][] = new String[2][tokenSize];
+		for (int i = 0; i < doc.sentences().size(); i++) {
+			List<CoreLabel> tokens = doc.sentences().get(i).tokens();
+			for (CoreLabel token : tokens) {
+				result[0][j] = token.word();
+				result[1][j] = OUT;
+				j++;
+			}
 		}
 		
 		// name 정보 기입 
@@ -130,9 +146,9 @@ public class ScraperService {
 			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			
-//			if (cve.getId().equals("CVE-2002-1148")) {
-//				boolean flag=true;
-//			}
+			if (cve.getId().equals("CVE-2019-10310")) {
+				boolean flag=true;
+			}
 			
 			if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
 				result = this.manageProductKey(productVo.getName(), result);
@@ -147,15 +163,15 @@ public class ScraperService {
 			desc.append(result[1][i]);
 			desc.append("\n");
 		}
-		description = desc.toString();
+//		description = desc.toString();
 		
 		// description 문장들 file로 저장 
 		try {
-			if (description.contains(BNAME)) {
+			if (desc.toString().contains(BNAME)) {
 				File trainData = new File("product_names.train");
 
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
-//				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+desc.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, desc.toString()+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
 				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
@@ -233,6 +249,7 @@ public class ScraperService {
 	 * @param description
 	 */
 	private String[][] keyArrangement(String[] names, String[][] description) {	
+		
 		// 제일 긴 Noun Phrase 서부터 하나씩 검출하기 
 		for (int i = names.length; i > 0; i--) {
 			int startIndex = 0;
@@ -252,22 +269,21 @@ public class ScraperService {
 					name.delete(name.length()-1, name.length());
 
 					// description에서 정보 검출하기 
-					int[] nameIndex = {-1,-1,-1,-1,-1,-1,-1,-1};
-					int count1 = 0;
+					int[] nameIndex = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+					int c = 0;
 					for (int j = 0; j < description[0].length; j++) {
-						if (description[0][j].toLowerCase().compareTo(name.toString().toLowerCase()) == 0) {
-							nameIndex[count1] = j;
-							count1++;
+						if (description[0][j].toLowerCase().contains(name.toString().toLowerCase())) {
+							nameIndex[c] = j;
+							c++;
 						}
 					}
 					
 					if (nameIndex[0] != -1) {
-						// Span이 겹치지 않는지 확인 
-						if (description[1][nameIndex[0]].compareTo(OUT) == 0) {
-							for (int j = 0; j < count1; j++) {
+						for (int j = 0; j < c; j++) {
+							if (description[1][nameIndex[j]].compareTo(OUT) == 0) {
 								description[1][nameIndex[j]] = BNAME;
+								checkChange = true;								
 							}
-							checkChange = true;
 						}
 					}
 				}
@@ -297,50 +313,48 @@ public class ScraperService {
 							checkChange = true;
 						}
 						
+						if (checkChange) {
+							return description;				
+						}
+						
 						// (3) NP delimiter가 "_"인 경우 확인 
 						full = 2;
 						for (int k = startIndex+1; k < endIndex; k++) {
-							if (description[0][j+full].toLowerCase().compareTo(names[k].toLowerCase()) == 0) {
-								full+=2;
-							} else {
+							try {
+								boolean same = description[0][j+full].toLowerCase().compareTo(names[k].toLowerCase()) == 0;
+								if ((description[0][j+full-1].compareTo("_") == 0) && same) {
+									full+=2;
+								} else {
+									break;
+								}
+							} catch (ArrayIndexOutOfBoundsException e) {
+								full-=2;
 								break;
 							}
 						}
-						
-						if (full == i*2 && description[1][j].compareTo(OUT) == 0) {
+							
+						if (full == (i)*2 && description[1][j].compareTo(OUT) == 0) {
 							description[1][j] = BNAME;
-							for (int k = 2; k < i; k+=2) {
+							for (int k = 2; k < full; k+=2) {
 								description[1][j+k] = INAME;
 							}
 							checkChange = true;
 						}
+						
+						if (checkChange) {
+							return description;				
+						}
 					}
 				}
 				
-				if (checkChange) {
-					return description;				
-				}
-				
-				
-				for (int j = 0; j < description[0].length; j++) {
-					if (description[0][j].toLowerCase().compareTo(names[startIndex].toLowerCase()) == 0) {
-
-					}
-				}
-				
-				if (checkChange) {
-					return description;				
-				}
-				
-
 				startIndex++;
 				endIndex++;
 				count--;				
 
 			}
 		}
-		return description;
 		
+		return description;
 	}
 
 
