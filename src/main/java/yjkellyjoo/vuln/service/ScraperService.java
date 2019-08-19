@@ -62,16 +62,16 @@ public class ScraperService {
 	public void perform() {
 		log.debug("performing... ");
 		
-//		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
-//		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
-//			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
-//			try {
-//				this.manageDescription(vulnLibraryVo);
-//			} catch (Exception e) {
-//				e.printStackTrace();
-//				log.info(vulnLibraryVo.getRefId());
-//			}
-//		}
+		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
+		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
+			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
+			try {
+				this.manageDescription(vulnLibraryVo);
+			} catch (Exception e) {
+				e.printStackTrace();
+				log.info(vulnLibraryVo.getRefId());
+			}
+		}
 		
 		this.trainModel();
 	}
@@ -153,21 +153,21 @@ public class ScraperService {
 			}
 		}
 		
-		StringBuffer desc = new StringBuffer();
+		StringBuffer descBuffer = new StringBuffer();
 		for (int i = 0; i < result[0].length; i++) {
-			desc.append(result[0][i]);
-			desc.append(result[1][i]);
-			desc.append("\n");
+			descBuffer.append(result[0][i]);
+			descBuffer.append(result[1][i]);
+			descBuffer.append("\n");
 		}
 //		description = desc.toString();
 		
 		// description 문장들 file로 저장 
 		try {
-			if (desc.toString().contains(BNAME)) {
+			if (descBuffer.toString().contains(BNAME)) {
 				File trainData = new File("product_names.train");
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+desc.toString()+"\n", StandardCharsets.UTF_8, true);
-				FileUtils.writeStringToFile(trainData, desc.toString()+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
 				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
