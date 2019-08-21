@@ -120,44 +120,41 @@ public class ScraperService {
 		CoreDocument doc = new CoreDocument(description);
 		pipeline.annotate(doc);
 		
-		int tokenSize = 0;
+		StringBuffer descBuffer = new StringBuffer();
+
 		for (int i = 0; i < doc.sentences().size(); i++) {
 			List<CoreLabel> tokens = doc.sentences().get(i).tokens();
-			tokenSize += tokens.size();
-		}
-		
-		int j = 0;
-		String result[][] = new String[2][tokenSize];
-		for (int i = 0; i < doc.sentences().size(); i++) {
-			List<CoreLabel> tokens = doc.sentences().get(i).tokens();
+			int tokenSize = tokens.size();
+			
+			int j = 0;
+			String result[][] = new String[2][tokenSize];
 			for (CoreLabel token : tokens) {
 				result[0][j] = token.word();
 				result[1][j] = OUT;
 				j++;
 			}
-		}
-		
-		// name 정보 기입 
-		for (int i = 0; i < vulnLibInfo.size(); i++) {
-			ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
-			log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(i).getLangauage(), vulnLibInfo.get(i).getRepository(), vulnLibInfo.get(i).getProductKey());
 			
-			if (cve.getId().equals("CVE-2019-10310")) {
-				boolean flag=true;
+			// name 정보 기입 
+			for (int k = 0; k < vulnLibInfo.size(); k++) {
+				ProductVo productVo = productDao.selectProduct(vulnLibInfo.get(k).getLangauage(), vulnLibInfo.get(k).getRepository(), vulnLibInfo.get(k).getProductKey());
+				log.debug("productVo: {}, {}, {} ", vulnLibInfo.get(k).getLangauage(), vulnLibInfo.get(k).getRepository(), vulnLibInfo.get(k).getProductKey());
+				
+				if (cve.getId().equals("CVE-2019-10310")) {
+					boolean flag=true;
+				}
+				
+				if (vulnLibInfo.get(k).getLangauage().compareTo("javascript") == 0) {
+					result = this.manageProductKey(productVo.getName(), result);
+				} else {
+					result = this.manageProductKey(productVo.getProductKey(), result);
+				}
 			}
 			
-			if (vulnLibInfo.get(i).getLangauage().compareTo("javascript") == 0) {
-				result = this.manageProductKey(productVo.getName(), result);
-			} else {
-				result = this.manageProductKey(productVo.getProductKey(), result);
+			for (int k = 0; k < result[0].length; k++) {
+				descBuffer.append(result[0][k]);
+				descBuffer.append(result[1][k]);
+				descBuffer.append("\n");
 			}
-		}
-		
-		StringBuffer descBuffer = new StringBuffer();
-		for (int i = 0; i < result[0].length; i++) {
-			descBuffer.append(result[0][i]);
-			descBuffer.append(result[1][i]);
-			descBuffer.append("\n");
 		}
 //		description = desc.toString();
 		
@@ -166,8 +163,8 @@ public class ScraperService {
 			if (descBuffer.toString().contains(BNAME)) {
 				File trainData = new File("product_names.train");
 
-//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+desc.toString()+"\n", StandardCharsets.UTF_8, true);
-				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
 				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
@@ -239,7 +236,6 @@ public class ScraperService {
 			int startIndex = 0;
 			int endIndex = i;
 			int count = names.length - i + 1;
-			boolean checkChange = false; 
 			
 			while ( count != 0 ) {
 				
@@ -266,16 +262,10 @@ public class ScraperService {
 						for (int j = 0; j < c; j++) {
 							if (description[1][nameIndex[j]].compareTo(OUT) == 0) {
 								description[1][nameIndex[j]] = BNAME;
-								checkChange = true;								
 							}
 						}
 					}
 				}
-				
-				if (checkChange) {
-					return description;				
-				}
-				
 				
 				for (int j = 0; j < description[0].length; j++) {
 					if (description[0][j].toLowerCase().compareTo(names[startIndex].toLowerCase()) == 0) {
@@ -294,11 +284,6 @@ public class ScraperService {
 							for (int k = 1; k < i; k++) {
 								description[1][j+k] = INAME;
 							}
-							checkChange = true;
-						}
-						
-						if (checkChange) {
-							return description;				
 						}
 						
 						// (3) NP delimiter가 "_"인 경우 확인 
@@ -322,11 +307,6 @@ public class ScraperService {
 							for (int k = 2; k < full; k+=2) {
 								description[1][j+k] = INAME;
 							}
-							checkChange = true;
-						}
-						
-						if (checkChange) {
-							return description;				
 						}
 					}
 				}
