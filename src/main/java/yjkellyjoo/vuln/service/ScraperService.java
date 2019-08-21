@@ -51,9 +51,9 @@ public class ScraperService {
 	@Resource(name="yjkellyjoo.vuln.dao.CveDao")
 	private CveDao cveDao;
 	
-	private final String BNAME = "\tB-NAME";
-	private final String INAME = "\tI-NAME";
-	private final String OUT = "\t0";
+	private static final String BNAME = "\tB-NAME";
+	private static final String INAME = "\tI-NAME";
+	private static final String OUT = "\t0";
 
 	
 	/**
@@ -69,7 +69,7 @@ public class ScraperService {
 				this.manageDescription(vulnLibraryVo);
 			} catch (Exception e) {
 				e.printStackTrace();
-				log.info(vulnLibraryVo.getRefId());
+				log.error(vulnLibraryVo.getRefId());
 			}
 		}
 		
@@ -163,8 +163,8 @@ public class ScraperService {
 			if (descBuffer.toString().contains(BNAME)) {
 				File trainData = new File("product_names.train");
 
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
-//				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
 				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
@@ -210,12 +210,20 @@ public class ScraperService {
 		
 		// 겹치는 경우 정리 
 //		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(tmp));
-		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(names));
-		String[] result = linked.toArray(new String[] {});
+//		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(names));
+//		String[] result = linked.toArray(new String[] {});
+		String[] result = names;
 		
 		// 숫자만 있는 경우 정리
 		for (String name : result) {
 			if (Pattern.matches("[^a-zA-Z]+", name)) {
+				result = ArrayUtils.removeElement(result, name);
+			}
+		}
+		
+		// 너무 짧은 이름 정리
+		for (String name : result) {
+			if (name.length() < 3) {
 				result = ArrayUtils.removeElement(result, name);
 			}
 		}
@@ -302,7 +310,7 @@ public class ScraperService {
 							}
 						}
 							
-						if (full == (i)*2 && description[1][j].compareTo(OUT) == 0) {
+						if (full == i*2 && description[1][j].compareTo(OUT) == 0) {
 							description[1][j] = BNAME;
 							for (int k = 2; k < full; k+=2) {
 								description[1][j+k] = INAME;
