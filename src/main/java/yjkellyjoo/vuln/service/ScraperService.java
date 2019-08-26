@@ -2,12 +2,12 @@ package yjkellyjoo.vuln.service;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.regex.Pattern;
@@ -16,10 +16,10 @@ import javax.annotation.Resource;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.*;
 import org.springframework.stereotype.Service;
 
 import lombok.extern.slf4j.Slf4j;
+
 import edu.stanford.nlp.ie.crf.CRFClassifier;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.pipeline.*;
@@ -30,12 +30,14 @@ import edu.stanford.nlp.util.StringUtils;
 import opennlp.tools.namefind.NameFinderME;
 import opennlp.tools.namefind.NameSample;
 import opennlp.tools.namefind.NameSampleDataStream;
+import opennlp.tools.namefind.TokenNameFinderEvaluator;
 import opennlp.tools.namefind.TokenNameFinderFactory;
 import opennlp.tools.namefind.TokenNameFinderModel;
 import opennlp.tools.util.MarkableFileInputStreamFactory;
 import opennlp.tools.util.ObjectStream;
 import opennlp.tools.util.PlainTextByLineStream;
 import opennlp.tools.util.TrainingParameters;
+import opennlp.tools.util.eval.FMeasure;
 
 import yjkellyjoo.runtime.util.StringUtil;
 import yjkellyjoo.vuln.dao.CveDao;
@@ -64,50 +66,140 @@ public class ScraperService {
 	@Resource(name="yjkellyjoo.vuln.dao.CveDao")
 	private CveDao cveDao;
 	
-	private final String NAME = "<START:name>";
-	private final String END = "<END>";
+	private static final String NAME = "<START:name>";
+	private static final String END = "<END>";
 
 	private static final String BNAME = "\tB-NAME";
 	private static final String INAME = "\tI-NAME";
 	private static final String OUT = "\t0";
 
-	
+	private static final String APACHETEST = "vendor-product.test";
+	private static final String APACHETRAIN = "vendor-product.train";
+	private static final String APACHEMODEL = "ner-organizations.bin";
+
+	private static final String STANFORDTEST = "product_names.test";
+	private static final String STANFORDTRAIN = "product_names.train";
+	private static final String STANFORDMODEL = "product-ner-model.ser.gz";
+
+	private static final String NOTEST = "noinfo.test";
+	private static final String NOTRAIN = "noinfo.train";
+
+			
 	/**
 	 * VULN_LIBRARY 정보 조회
 	 */
 	public void perform() {
 		log.debug("performing... ");
 		
+		// arrange dataset
 		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
-		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
+		for (int i = 0; i < vulnLibList.size(); i++) {
+			VulnLibraryVo vulnLibraryVo = vulnLibList.get(i);			
 			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
-			try {
-				this.manageStanford(vulnLibraryVo);
-				this.manageApache(vulnLibraryVo);
-			} catch (Exception e) {
-				e.printStackTrace();
-				log.error(vulnLibraryVo.getRefId());
+			
+			if (i%10 != 0) {
+				try {
+					StringBuffer descBuffer = this.manageStanford(vulnLibraryVo);
+					if (descBuffer != null) {
+						this.writeToFileStanford(descBuffer);
+					}
+					
+					String result = this.manageApache(vulnLibraryVo);
+					if (result != null) {
+						this.writeToFileApache(result);						
+					}
+					
+				} catch (Exception e) {
+					e.printStackTrace();
+					log.error(vulnLibraryVo.getRefId());
+				}
+				
+			} else {
+				try {
+					StringBuffer descBuffer = this.manageStanford(vulnLibraryVo);
+					if (descBuffer != null) {
+						this.writeTestStanford(descBuffer);
+					}
+					
+					String result = this.manageApache(vulnLibraryVo);
+					if (result != null) {
+						this.writeTestApache(result);						
+					}
+					
+				} catch (Exception e) {
+					e.printStackTrace();
+					log.error(vulnLibraryVo.getRefId());
+				}
 			}
 		}
 		
-//		try {
-//			this.trainApache();
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//			log.error("problem while handling files...");
-//		}
-//		this.trainStanford();
+		// train models
+		try {
+			this.trainApache();
+		} catch (IOException e) {
+			e.printStackTrace();
+			log.error("problem while handling files...");
+		}
+		this.trainStanford();
+		
+		// evaluate models
+		try {
+			this.evaluateApache();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		this.evaluateStanford();
 	}
 
+
+	private void writeTestApache(String description) {
+
+		// description 문장들 file로 저장 
+		try {
+			if (description.contains(END)) {
+
+				File trainData = new File(APACHETEST);
+
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+			} else {
+				File trainData = new File(NOTEST);
+				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+
+	private void writeTestStanford(StringBuffer descBuffer) {
+		// description 문장들 file로 저장 
+		try {
+			if (descBuffer.toString().contains(BNAME)) {
+				File trainData = new File(STANFORDTEST);
+
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+			} else {
+				File trainData = new File(NOTEST);
+				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
 
 	/**
 	 * CVE 정보에서 description 부분 training data
 	 * @param vulnLib
 	 */
-	private void manageApache(VulnLibraryVo vulnLib) {
+	private String manageApache(VulnLibraryVo vulnLib) {
 		// TB_VULN_LIBRARY에 row가 저장은 되어있는데 정보가 빈 경우..
 		if (vulnLib.getVulnLibraryInfos().size() == 0) {
-			return;
+			return null;
 		}
 		
 		// vulnLibInfo list에 한 CVE의 취약한 library 정보 중복 없이 정리 
@@ -133,7 +225,6 @@ public class ScraperService {
 		}
 		
 		// description에 vendor와 product 정보 기입 
-
 		CveVo cve = cveDao.selectCve(vulnLib.getRefId());
 		String result = new String(cve.getDescriptionString());
 
@@ -155,33 +246,41 @@ public class ScraperService {
 		// double space 정리
 		result = result.replaceAll("  ", " ");
 
+		return result;
+	}
+	
+	
+	private void writeToFileApache(String description) {
+
 		// description 문장들 file로 저장 
 		try {
-			if (result.contains(END)) {
+			if (description.contains(END)) {
 
 				File trainData = new File("vendor-product.train");
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
-				FileUtils.writeStringToFile(trainData, result+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 			} else {
 				File trainData = new File("noinfo.train");
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
+				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		
 
 	}
-
-
+	
+	
 	/**
 	 * CVE 정보에서 description 부분 training data
 	 * @param vulnLib
 	 */
-	private void manageStanford(VulnLibraryVo vulnLib) {
+	private StringBuffer manageStanford(VulnLibraryVo vulnLib) {
 		// TB_VULN_LIBRARY에 row가 저장은 되어있는데 정보가 빈 경우..
 		if (vulnLib.getVulnLibraryInfos().size() == 0) {
-			return;
+			return null;
 		}
 		
 		// vulnLibInfo list에 한 CVE의 취약한 library 정보 중복 없이 정리 
@@ -254,26 +353,30 @@ public class ScraperService {
 				descBuffer.append("\n");
 			}
 		}
-//		description = desc.toString();
 		
+		return descBuffer;
+	}
+
+
+	private void writeToFileStanford(StringBuffer descBuffer) {
 		// description 문장들 file로 저장 
 		try {
 			if (descBuffer.toString().contains(BNAME)) {
-				File trainData = new File("product_names.train");
+				File trainData = new File(STANFORDTRAIN);
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 			} else {
-				File trainData = new File("noinfo.train");
-				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
+				File trainData = new File(NOTRAIN);
+				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+//				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
 	}
 	
-		
+	
 	/**
 	 * description에 vendor와 product 정보 기입 
 	 * @param productKeySplit
@@ -313,26 +416,13 @@ public class ScraperService {
 		return result;
 	}
 	
+	
 	/**
 	 * 이름들 정리하기
 	 * @param names
 	 * @return
 	 */
 	private String[] arrangeNames(String[] names) {
-		
-//		// 흔한 이름 정리 
-//		String[] tmp = names.clone();
-//		for (String name : names) {
-//			boolean flag = this.checkException(name);
-//			if (flag) {
-//				tmp = ArrayUtils.removeElement(tmp, name);
-//			}
-//		}
-		
-		// 겹치는 경우 정리 
-//		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(tmp));
-//		LinkedHashSet<String> linked = new LinkedHashSet<>(Arrays.asList(names));
-//		String[] result = linked.toArray(new String[] {});
 		String[] result = names;
 		
 		// 숫자만 있는 경우 정리
@@ -525,8 +615,8 @@ public class ScraperService {
 	 */
 	private void trainStanford() {
 		String prop = "product_names.prop";
-		String modelOutPath = "product-ner-model.ser.gz";
-		String trainingFilepath = "product_names.train";
+		String modelOutPath = STANFORDMODEL;
+		String trainingFilepath = STANFORDTRAIN;
 		
 		Properties props = StringUtils.propFileToProperties(prop);
 		props.setProperty("serializeTo", modelOutPath);
@@ -544,7 +634,7 @@ public class ScraperService {
 	 * @throws IOException 
 	 */
 	private void trainApache() throws IOException {
-		MarkableFileInputStreamFactory inputStreamFactory = new MarkableFileInputStreamFactory(new File("vendor-product.train"));
+		MarkableFileInputStreamFactory inputStreamFactory = new MarkableFileInputStreamFactory(new File(APACHETRAIN));
 		ObjectStream<String> lineStream = new PlainTextByLineStream(inputStreamFactory, StandardCharsets.UTF_8);
 		TokenNameFinderModel model = null;
 		TokenNameFinderFactory nameFinderFactory = new TokenNameFinderFactory();		
@@ -559,7 +649,7 @@ public class ScraperService {
 			return;
 		}
 		
-		File modelFile = new File("ner-organizations.bin");
+		File modelFile = new File(APACHEMODEL);
 		FileOutputStream out = new FileOutputStream(modelFile); 
 		
 		try (BufferedOutputStream modelOut = new BufferedOutputStream(out)) {
@@ -567,6 +657,55 @@ public class ScraperService {
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
+	}
+	
+
+	private void evaluateStanford() {
+		Runtime rt = Runtime.getRuntime();
+		try {
+			Process pr = rt.exec("java -mx700m -cp stanford-ner-3.9.2.jar edu.stanford.nlp.ie.crf.CRFClassifier -loadClassifier product-ner-model.ser.gz -testFile product_names.test");
+
+			//TODO 결과값 나오게하기 
+//			new Thread(new Runnable() {
+//			    public void run() {
+//			     BufferedReader input = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+//			     String line = null; 
+//
+//			     try {
+//			        while ((line = input.readLine()) != null)
+//			            System.out.println(line);
+//			     } catch (IOException e) {
+//			            e.printStackTrace();
+//			     }
+//			    }
+//			}).start();
+//
+//			try {
+//				pr.waitFor();
+//			} catch (InterruptedException e) {
+//				e.printStackTrace();
+//			}
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+
+	private void evaluateApache() throws IOException {
+		InputStream modelInOrg = new FileInputStream(APACHEMODEL);
+		TokenNameFinderModel model = new TokenNameFinderModel(modelInOrg);
+		TokenNameFinderEvaluator evaluator = new TokenNameFinderEvaluator(new NameFinderME(model));
+		
+		MarkableFileInputStreamFactory inputStreamFactory = new MarkableFileInputStreamFactory(new File(APACHETEST));
+		ObjectStream<String> lineStream = new PlainTextByLineStream(inputStreamFactory, StandardCharsets.UTF_8);
+		ObjectStream<NameSample> sampleStream = new NameSampleDataStream(lineStream);
+		
+		evaluator.evaluate(sampleStream);
+		
+		FMeasure result = evaluator.getFMeasure();
+		
+		log.info(result.toString());
 	}
 	
 }
