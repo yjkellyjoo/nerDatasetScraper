@@ -75,7 +75,7 @@ public class ScraperService {
 		}
 		
 		try {
-			this.trainModel();
+			this.trainApache();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -290,7 +290,7 @@ public class ScraperService {
 	 * model 학습시키기
 	 * @throws IOException 
 	 */
-	private void trainModel() throws IOException {
+	private void trainApache() throws IOException {
 		MarkableFileInputStreamFactory inputStreamFactory = new MarkableFileInputStreamFactory(new File("vendor-product.train"));
 		ObjectStream<String> lineStream = new PlainTextByLineStream(inputStreamFactory, StandardCharsets.UTF_8);
 		TokenNameFinderModel model = null;
