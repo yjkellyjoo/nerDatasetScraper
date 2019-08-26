@@ -51,3 +51,5 @@ target/*
 vendor-product.train
 noinfo.train
 vendor-product.model
+product_names.train
+product-ner-model.ser.gz
