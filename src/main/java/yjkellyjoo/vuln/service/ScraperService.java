@@ -71,7 +71,7 @@ public class ScraperService {
 		
 		for (VulnLibraryVo vulnLibraryVo : vulnLibList) {
 			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
-			this.manageDescription(vulnLibraryVo);
+			this.manageApache(vulnLibraryVo);
 		}
 		
 		try {
@@ -85,7 +85,7 @@ public class ScraperService {
 	 * CVE 정보에서 description 부분 training data
 	 * @param vulnLib
 	 */
-	private void manageDescription(VulnLibraryVo vulnLib) {
+	private void manageApache(VulnLibraryVo vulnLib) {
 		// TB_VULN_LIBRARY에 row가 저장은 되어있는데 정보가 빈 경우..
 		if (vulnLib.getVulnLibraryInfos().size() == 0) {
 			return;
