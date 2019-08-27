@@ -66,6 +66,7 @@ public class ScraperService {
 	@Resource(name="yjkellyjoo.vuln.dao.CveDao")
 	private CveDao cveDao;
 	
+	
 	private static final String NAME = "<START:name>";
 	private static final String END = "<END>";
 
@@ -73,16 +74,19 @@ public class ScraperService {
 	private static final String INAME = "\tI-NAME";
 	private static final String OUT = "\t0";
 
-	private static final String APACHETEST = "vendor-product.test";
-	private static final String APACHETRAIN = "vendor-product.train";
-	private static final String APACHEMODEL = "ner-organizations.bin";
+	
+	private static final String PATH = "./src/main/resources/ner";
+	
+	private static final String APACHETEST = PATH+"apache.test";
+	private static final String APACHETRAIN = PATH+"apache.train";
+	private static final String APACHEMODEL = PATH+"apache_ner.bin";
 
-	private static final String STANFORDTEST = "product_names.test";
-	private static final String STANFORDTRAIN = "product_names.train";
-	private static final String STANFORDMODEL = "product-ner-model.ser.gz";
-
-	private static final String NOTEST = "noinfo.test";
-	private static final String NOTRAIN = "noinfo.train";
+	private static final String STANFORDTEST = PATH+"stanford.test";
+	private static final String STANFORDTRAIN = PATH+"stanford.train";
+	private static final String STANFORDMODEL = PATH+"stanford_ner.ser.gz";
+	private static final String PROP = PATH+"product_names.prop";
+	
+	private static final String NOINFO = "noinfo.txt";
 
 			
 	/**
@@ -157,13 +161,12 @@ public class ScraperService {
 		// description 문장들 file로 저장 
 		try {
 			if (description.contains(END)) {
-
 				File trainData = new File(APACHETEST);
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
 				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 			} else {
-				File trainData = new File(NOTEST);
+				File trainData = new File(NOINFO);
 				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
 			}
@@ -181,9 +184,9 @@ public class ScraperService {
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
-			} else {
-				File trainData = new File(NOTEST);
-				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+//			} else {
+//				File trainData = new File(NOTEST);
+//				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
@@ -256,12 +259,12 @@ public class ScraperService {
 		try {
 			if (description.contains(END)) {
 
-				File trainData = new File("vendor-product.train");
+				File trainData = new File(APACHETRAIN);
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
 				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 			} else {
-				File trainData = new File("noinfo.train");
+				File trainData = new File(NOINFO);
 				FileUtils.writeStringToFile(trainData, description+"\n", StandardCharsets.UTF_8, true);
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+" "+result+"\n", StandardCharsets.UTF_8, true);
 			}
@@ -366,9 +369,9 @@ public class ScraperService {
 
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
-			} else {
-				File trainData = new File(NOTRAIN);
-				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
+//			} else {
+//				File trainData = new File(NOTRAIN);
+//				FileUtils.writeStringToFile(trainData, descBuffer.toString()+"\n", StandardCharsets.UTF_8, true);
 //				FileUtils.writeStringToFile(trainData, vulnLib.getRefId()+"\n"+description+"\n", StandardCharsets.UTF_8, true);
 			}
 		} catch (IOException e) {
@@ -614,7 +617,7 @@ public class ScraperService {
 	 * @throws IOException 
 	 */
 	private void trainStanford() {
-		String prop = "product_names.prop";
+		String prop = PROP;
 		String modelOutPath = STANFORDMODEL;
 		String trainingFilepath = STANFORDTRAIN;
 		
@@ -663,7 +666,7 @@ public class ScraperService {
 	private void evaluateStanford() {
 		Runtime rt = Runtime.getRuntime();
 		try {
-			Process pr = rt.exec("java -mx700m -cp stanford-ner-3.9.2.jar edu.stanford.nlp.ie.crf.CRFClassifier -loadClassifier product-ner-model.ser.gz -testFile product_names.test");
+			Process pr = rt.exec("java -mx700m -cp ./src/main/resources/stanford-ner-3.9.2.jar edu.stanford.nlp.ie.crf.CRFClassifier -loadClassifier "+STANFORDMODEL+" -testFile "+STANFORDTEST);
 
 			//TODO 결과값 나오게하기 
 //			new Thread(new Runnable() {
