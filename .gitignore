@@ -10,9 +10,9 @@ HELP.md
 .settings/org.eclipse.wst.common.project.facet.core.xml
 target/*
 noinfo.txt
-src/main/resources/apache.test
-src/main/resources/apache.train
-src/main/resources/apache_ner.bin
-src/main/resources/stanford.test
-src/main/resources/stanford.train
-src/main/resources/stanford_ner.ser.gz
+src/main/resources/ner/apache.test
+src/main/resources/ner/apache.train
+src/main/resources/ner/apache_ner.bin
+src/main/resources/ner/stanford.test
+src/main/resources/ner/stanford.train
+src/main/resources/ner/stanford_ner.ser.gz

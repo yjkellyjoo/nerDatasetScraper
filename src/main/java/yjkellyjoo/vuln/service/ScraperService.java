@@ -75,7 +75,7 @@ public class ScraperService {
 	private static final String OUT = "\t0";
 
 	
-	private static final String PATH = "./src/main/resources/ner";
+	private static final String PATH = "./src/main/resources/ner/";
 	
 	private static final String APACHETEST = PATH+"apache.test";
 	private static final String APACHETRAIN = PATH+"apache.train";
