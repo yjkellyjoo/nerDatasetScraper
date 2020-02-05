@@ -5,43 +5,17 @@ spring:
 
   #profile 설정을 안했을 시 active profile
   profiles:
-    active: prod
+    active: local
 
----
-
-spring:
-  profiles: prod
-  datasource:
-    driver-class-name: "com.mysql.cj.jdbc.Driver"
-    url: "jdbc:mysql://iotcubebdprod.chg7rza3lauf.ap-northeast-2.rds.amazonaws.com:3306/iotcubebd?useUnicode=true&useSSL=false&useLegacyDatetimeCode=false&serverTimezone=UTC&useServerPrepStmts=true&rewriteBatchedStatements=true&characterEncoding=UTF-8&autoReconnect=true&allowMultiQueries=true"
-    username: "iotcubebd"
-    password: "IoTcubebdprod!"
-
-mybatis:
-  mapper-locations: "classpath:mybatis/mapper/**/*.xml"
-  
----
-
-spring:
-  profiles: dev
-  datasource:
-    driver-class-name: "com.mysql.cj.jdbc.Driver"
-    url: "jdbc:mysql://iotcubedevdb.chg7rza3lauf.ap-northeast-2.rds.amazonaws.com:3306/iotcube?useUnicode=true&useSSL=false&useLegacyDatetimeCode=false&serverTimezone=UTC&useServerPrepStmts=true&rewriteBatchedStatements=true&characterEncoding=UTF-8&autoReconnect=true&allowMultiQueries=true"
-    username: "iotcube"
-    password: "deviotcube"
-
-mybatis:
-  mapper-locations: "classpath:mybatis/mapper/**/*.xml"
-  
 ---
 
 spring:
   profiles: local
   datasource:
     driver-class-name: "com.mysql.cj.jdbc.Driver"
-    url: "jdbc:mysql://127.0.0.1:3306/iotcube?useUnicode=true&useSSL=false&useLegacyDatetimeCode=false&serverTimezone=UTC&useServerPrepStmts=true&rewriteBatchedStatements=true&characterEncoding=UTF-8&autoReconnect=true&allowMultiQueries=true"
-    username: "iotcube"
-    password: "localiotcube"
+    url: "jdbc:mysql://127.0.0.1:3306/cve_cpe?useUnicode=true&useSSL=false&useLegacyDatetimeCode=false&serverTimezone=UTC&useServerPrepStmts=true&rewriteBatchedStatements=true&characterEncoding=UTF-8&autoReconnect=true&allowMultiQueries=true"
+    username: "cve_cpe"
+    password: "cve_cpe!@#"
 
 mybatis:
   mapper-locations: "classpath:mybatis/mapper/**/*.xml"

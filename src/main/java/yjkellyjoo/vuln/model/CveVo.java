@@ -52,8 +52,8 @@ public class CveVo {
 	private float v2BaseScore;
 	private V2Severity v2Severity;
 
-	private List<VulnLibraryInfo> vulnLibraryInfos;
-	private Timestamp libraryMappingDate;
+//	private List<VulnLibraryInfo> vulnLibraryInfos;
+//	private Timestamp libraryMappingDate;
 
 	@SuppressWarnings("unchecked")
 	public String getDescriptionString() {

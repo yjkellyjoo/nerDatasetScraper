@@ -1,13 +1,3 @@
-/**
- * Copyright (c) 2018 IoTcube, Inc.
- * All right reserved.
- *
- * This software is the confidential and proprietary information of IoTcube, Inc. 
- * You shall not disclose such Confidential Information and
- * shall use it only in accordance with the terms of the license agreement
- * you entered into with IoTcube, Inc.
-*/
-
 package yjkellyjoo.runtime.config;
 
 import java.util.ArrayList;
@@ -30,11 +20,6 @@ import org.springframework.transaction.interceptor.RuleBasedTransactionAttribute
 
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * 
- * @author 	hyeonggookim
- * @since 	2019. 1. 3.
- */
 @Slf4j
 @Aspect
 @Configuration

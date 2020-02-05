@@ -1,11 +1,13 @@
 package yjkellyjoo.vuln.service;
 
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,18 +87,42 @@ public class ScraperService {
 	private static final String STANFORDTRAIN = PATH+"stanford.train";
 	private static final String STANFORDMODEL = PATH+"stanford_ner.ser.gz";
 	private static final String PROP = PATH+"product_names.prop";
-	
-	private static final String NOINFO = "noinfo.txt";
+	private static final String STANFORDEVALUATION = PATH+"stanford.eval";
 
-			
-	/**
-	 * VULN_LIBRARY 정보 조회
-	 */
+	private static final String NOINFO = PATH+"noinfo.txt";
+
+
 	public void perform() {
 		log.debug("performing... ");
 		
 		// arrange dataset
+		this.arrangeVulndata();
+		
+		// train models
+		try {
+			this.trainApache();
+		} catch (IOException e) {
+			e.printStackTrace();
+			log.error("problem while handling files...");
+		}
+		this.trainStanford();
+		
+		// evaluate models
+		try {
+			this.evaluateApache();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		this.evaluateStanford();
+	}
+
+	
+	/**
+	* VULN_LIBRARY 정보 조회 및 dataset 정리 
+	*/
+	private void arrangeVulndata() {
 		List<VulnLibraryVo> vulnLibList = vulnLibraryDao.selectAllVulnLibraryList();
+		log.info(" {} ", vulnLibList.size());
 		for (int i = 0; i < vulnLibList.size(); i++) {
 			VulnLibraryVo vulnLibraryVo = vulnLibList.get(i);			
 			log.debug("VULN_LIB: {} ", vulnLibraryVo.getRefId() );
@@ -136,25 +162,7 @@ public class ScraperService {
 				}
 			}
 		}
-		
-		// train models
-		try {
-			this.trainApache();
-		} catch (IOException e) {
-			e.printStackTrace();
-			log.error("problem while handling files...");
-		}
-		this.trainStanford();
-		
-		// evaluate models
-		try {
-			this.evaluateApache();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		this.evaluateStanford();
 	}
-
 
 	private void writeTestApache(String description) {
 
@@ -642,7 +650,8 @@ public class ScraperService {
 		TokenNameFinderModel model = null;
 		TokenNameFinderFactory nameFinderFactory = new TokenNameFinderFactory();		
 		
-		try (ObjectStream<NameSample> sampleStream = new NameSampleDataStream(lineStream)) {
+		try (ObjectStream<NameSample> sampleStream = new NameSampleDataStream(lineStream)) 	// name들만 모아놓은 data stream
+		{
 			model = NameFinderME.train("en", null, sampleStream, TrainingParameters.defaultParams(), nameFinderFactory);
 		} catch(Exception e) {
 			e.printStackTrace();
@@ -662,32 +671,33 @@ public class ScraperService {
 		}
 	}
 	
-
+	
 	private void evaluateStanford() {
 		Runtime rt = Runtime.getRuntime();
 		try {
 			Process pr = rt.exec("java -mx700m -cp ./src/main/resources/stanford-ner-3.9.2.jar edu.stanford.nlp.ie.crf.CRFClassifier -loadClassifier "+STANFORDMODEL+" -testFile "+STANFORDTEST);
 
-			//TODO 결과값 나오게하기 
-//			new Thread(new Runnable() {
-//			    public void run() {
-//			     BufferedReader input = new BufferedReader(new InputStreamReader(pr.getInputStream()));
-//			     String line = null; 
-//
-//			     try {
-//			        while ((line = input.readLine()) != null)
-//			            System.out.println(line);
-//			     } catch (IOException e) {
-//			            e.printStackTrace();
-//			     }
-//			    }
-//			}).start();
-//
-//			try {
-//				pr.waitFor();
-//			} catch (InterruptedException e) {
-//				e.printStackTrace();
-//			}
+			new Thread(new Runnable() {
+			    public void run() {
+			     BufferedReader input = new BufferedReader(new InputStreamReader(pr.getInputStream()));
+			     String line = null; 
+
+			     try {
+			        while ((line = input.readLine()) != null) {
+			    		File standfordEval = new File(STANFORDEVALUATION);
+						FileUtils.writeStringToFile(standfordEval, line+"\n", StandardCharsets.UTF_8, true);
+			        }
+			     } catch (IOException e) {
+			            e.printStackTrace();
+			     }
+			    }
+			}).start();
+
+			try {
+				pr.waitFor();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 			
 		} catch (IOException e) {
 			e.printStackTrace();

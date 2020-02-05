@@ -1,13 +1,3 @@
-/**
- * Copyright (c) 2018 IoTcube, Inc.
- * All right reserved.
- *
- * This software is the confidential and proprietary information of IoTcube, Inc. 
- * You shall not disclose such Confidential Information and
- * shall use it only in accordance with the terms of the license agreement
- * you entered into with IoTcube, Inc.
-*/
-
 package yjkellyjoo.runtime.mybatis;
 
 import java.sql.CallableStatement;
@@ -25,11 +15,6 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import yjkellyjoo.vuln.model.VulnLibraryInfo;
 
-/**
- * 
- * @author 	hyeonggookim
- * @since 	2019. 2. 25.
- */
 
 public class JsonListVulnLibraryInfoTypeHandler extends BaseTypeHandler<List<VulnLibraryInfo>> {
 
