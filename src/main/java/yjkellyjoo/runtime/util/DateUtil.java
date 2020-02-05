@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2018 IoTcube, Inc.
+ * All right reserved.
+ *
+ * This software is the confidential and proprietary information of IoTcube, Inc.
+ * You shall not disclose such Confidential Information and
+ * shall use it only in accordance with the terms of the license agreement
+ * you entered into with IoTcube, Inc.
+*/
+
 package yjkellyjoo.runtime.util;
 
 import java.sql.Timestamp;
@@ -5,6 +15,12 @@ import java.util.Date;
 
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
+
+/**
+ *
+ * @author 	hyeonggookim
+ * @since 	2019. 1. 22.
+ */
 
 public class DateUtil {
 

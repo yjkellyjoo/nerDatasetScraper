@@ -20,6 +20,8 @@
 		<result column="BASE_METRIC_V2" property="baseMetricV2" />  			
 		<result column="V2_BASE_SCORE" property="v2BaseScore" />  			
 		<result column="V2_SEVERITY" property="v2Severity" /> 
+		<result column="LIBRARY_MAPPING_DATE" property="libraryMappingDate" />
+		<result column="VULN_LIBRARY_INFO" property="vulnLibraryInfos" typeHandler="yjkellyjoo.runtime.mybatis.JsonListVulnLibraryInfoTypeHandler"/>
 	</resultMap>
 
 	<sql id="selectCveSql">
@@ -39,94 +41,76 @@
 			TB_CVE_DATA.V3_SEVERITY,
 			TB_CVE_DATA.BASE_METRIC_V2,
 			TB_CVE_DATA.V2_BASE_SCORE,
-			TB_CVE_DATA.V2_SEVERITY
+			TB_CVE_DATA.V2_SEVERITY,
+			TB_VULN_LIBRARY.VULN_LIBRARY_INFO
 		FROM
 			TB_CVE_DATA
+			LEFT JOIN TB_VULN_LIBRARY ON TB_VULN_LIBRARY.VULN_SOURCE_CD = 'CVE' AND TB_CVE_DATA.ID = TB_VULN_LIBRARY.REF_ID
 	</sql>
 	
 	<select id="selectCve" resultMap="CveDataMap">
 		<include refid="selectCveSql" />
 		WHERE 
-			TB_CVE_DATA.ID = #{id}	
+			TB_CVE_DATA.ID = #{cveId}	
     	/* yjkellyjoo.vuln.dao.CveDao.selectCve */
 	</select>	
 	
-	<insert id="insertAllData" parameterType="yjkellyjoo.vuln.model.CveVo">
-		INSERT INTO TB_CVE_DATA (
-			ID, 
-			BASIC_INFO,
-			AFFECTS,
-			PROBLEM_TYPE,
-			CWE_ID,
-			`REFERENCES`,
-			DESCRIPTION,
-			PUBLISHED_DATE,
-			LAST_MODIFIED_DATE,
-			CONFIGURATIONS,
-			BASE_METRIC_V3,
-			V3_BASE_SCORE,
-			V3_SEVERITY,
-			BASE_METRIC_V2,
-			V2_BASE_SCORE,
-			V2_SEVERITY
-		) VALUES 
-		<foreach collection="list" item="item" separator=", ">
-		(
-			#{item.id}, 
-			#{item.basicInfo},
-			#{item.affects},
-			#{item.problemType},
-			#{item.cweId},
-			#{item.references},
-			#{item.description},
-			#{item.publishedDate},
-			#{item.lastModifiedDate},
-			#{item.configurations},
-			#{item.baseMetricV3},
-			#{item.v3BaseScore},
-			#{item.v3Severity},
-			#{item.baseMetricV2},
-			#{item.v2BaseScore},
-			#{item.v2Severity}
-		)
-		</foreach>
-		/* yjkellyjoo.vuln.dao.CveDao.insertAllData */
-	</insert>
-		
-	<update id="updateData" parameterType="yjkellyjoo.vuln.model.CveVo">
-		update TB_CVE_DATA set
-			BASIC_INFO = #{basicInfo}, 
-			AFFECTS = #{affects},
- 			PROBLEM_TYPE = #{problemType}, 
-			CWE_ID = #{cweId}, 
-			`REFERENCES` = #{references},
-			DESCRIPTION = #{description},
-			PUBLISHED_DATE = #{publishedDate},
-			LAST_MODIFIED_DATE = #{lastModifiedDate},
-			CONFIGURATIONS = #{configurations},	
-			BASE_METRIC_V3 = #{baseMetricV3},
-			V3_BASE_SCORE = #{v3BaseScore},
-			V3_SEVERITY = #{v3Severity},
-			BASE_METRIC_V2 = #{baseMetricV2},
-			V2_BASE_SCORE = #{v2BaseScore},
-			V2_SEVERITY = #{v2Severity}
-		where ID = #{id}
-		/* yjkellyjoo.vuln.dao.CveDao.updateData */
-	</update>
-
-	<delete id="deleteAllData">
-		DELETE FROM TB_CVE_DATA
-		/* yjkellyjoo.vuln.dao.CveDao.deleteAllData */
-	</delete>
-
-	<select id="selectCveListInLimit" parameterType="hashmap" resultMap="CveDataMap">
+	<select id="selectCveListPaging" resultMap="CveDataMap" parameterType="hashmap">
 		SELECT
-			AFFECTS 
-		FROM TB_CVE_DATA
+			CVE.ID,
+			CVE.DESCRIPTION,
+			CVE.PUBLISHED_DATE,
+			CVE.LAST_MODIFIED_DATE,
+			VUL.VULN_LIBRARY_INFO,
+			VUL.LAST_UPDATED AS LIBRARY_MAPPING_DATE
+		FROM
+			TB_CVE_DATA AS CVE
+			LEFT JOIN TB_VULN_LIBRARY AS VUL ON VUL.VULN_SOURCE_CD = 'CVE' AND CVE.ID = VUL.REF_ID
+		<where>
+			<if test="param.keyword != null and param.keyword != ''">
+			CVE.ID = #{param.keyword}
+			</if>
+		</where>
 		ORDER BY
-			ID ASC
-		LIMIT #{start}, #{end}
-    	/* yjkellyjoo.vuln.dao.CveDao.selectCveListInLimit */
+		<choose>
+			<when test="param.orderColumn.equalsIgnoreCase('cvdId')">
+			CVE.ID
+			</when>
+			<when test="param.orderColumn.equalsIgnoreCase('publishDate')">
+			CVE.PUBLISHED_DATE
+			</when>
+			<otherwise>
+			CVE.LAST_MODIFIED_DATE
+			</otherwise>
+		</choose>
+		<choose>
+			<when test="param.orderDir.equalsIgnoreCase('asc')">
+			ASC
+			</when>
+			<when test="param.orderDir.equalsIgnoreCase('desc')">
+			DESC
+			</when>
+			<otherwise>
+			DESC
+			</otherwise>
+		</choose>	
+		<if test="param.length &gt; 0">
+		LIMIT #{param.start}, #{param.length}
+		</if>
+    	/* yjkellyjoo.vuln.dao.CveDao.selectCveListPaging */
 	</select>
-
+	
+	<select id="selectTotalCveCount" resultType="int" parameterType="hashmap">
+		SELECT
+			COUNT(1) AS CNT
+		FROM
+			TB_CVE_DATA AS CVE
+			LEFT JOIN TB_VULN_LIBRARY AS VUL ON VUL.VULN_SOURCE_CD = 'CVE' AND CVE.ID = VUL.REF_ID
+		<where>
+			<if test="param.keyword != null and param.keyword != ''">
+			CVE.ID = #{param.keyword}
+			</if>
+		</where>
+    	/* yjkellyjoo.vuln.dao.CveDao.selectTotalCveCount */
+	</select>
 </mapper>
